@@ -2891,17 +2891,63 @@ function renderMntApp(){
           <div style="font-size:12px;color:#888">สมสุภาเพรส รัชดา</div>
           <div id="mnt-qr-url" style="font-size:10px;color:#aaa;margin-top:4px;word-break:break-all;max-width:200px"></div>
         </div>
-        <div style="margin-top:16px;display:flex;gap:10px;justify-content:center">
+        <div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <button onclick="_mntPrintQR()" class="btn btn-pr">🖨️ พิมพ์ QR Code</button>
+          <button onclick="_mntCheckSubmissions()" class="btn btn-gr"><i class="ti ti-cloud-download"></i> รับข้อมูลที่ส่งมา</button>
         </div>
+        <div id="mnt-qr-sync-status" style="font-size:12px;color:#666;margin-top:8px"></div>
         <div style="margin-top:16px;background:#eef3fa;border-radius:7px;padding:12px 16px;font-size:13px;color:#444;text-align:left;line-height:1.9">
           <strong>💡 วิธีใช้:</strong><br>
-          ผู้เช่าสแกน QR → กรอกห้อง / ประเภท / รายละเอียด → ส่ง → บันทึกเข้า ApartPro ทันที
+          ผู้เช่าสแกน QR → กรอกห้อง / ประเภท / รายละเอียด → ส่ง → กดปุ่ม "รับข้อมูลที่ส่งมา" ด้านบนเพื่อดึงเข้าระบบ
         </div>
       </div>
     </div>
   </div>`;
   if(curTab==='qr') setTimeout(_mntDrawQR, 50);
+}
+
+// core: ดึง submissions จาก Firebase แล้วเพิ่มเข้า maintenance list
+// silent=true ใช้สำหรับ auto-poll พื้นหลัง (ไม่โชว์ error/loading message กวนผู้ใช้)
+async function _mntFetchSubmissionsCore(silent){
+  const s = LS.get('settings')||{};
+  const db = (s.firebase||'').trim().replace(/\/+$/,'');
+  if(!db) return {ok:false, added:0, reason:'no-firebase'};
+  try{
+    const mr = await fetch(db+'/ap_submissions/maintenance.json');
+    const mData = await mr.json();
+    let added = 0;
+    if(mData && typeof mData==='object'){
+      const mnts = LS.get('maintenance')||[];
+      const existing = new Set(mnts.map(m=>m.firebaseKey));
+      Object.entries(mData).forEach(([k,v])=>{
+        if(!existing.has(k)){
+          mnts.push({id:uid('MNT'),room:v.room||'',type:v.type||'อื่นๆ',detail:v.detail||'',priority:v.priority||'ปกติ',tech:'',status:'รอดำเนินการ',date:v.date||today(),cost:0,firebaseKey:k,source:'qr'});
+          added++;
+        }
+      });
+      if(added>0) LS.set('maintenance',mnts);
+    }
+    return {ok:true, added};
+  }catch(e){
+    return {ok:false, added:0, reason:e.message};
+  }
+}
+
+async function _mntCheckSubmissions(){
+  const s = LS.get('settings')||{};
+  const db = (s.firebase||'').trim().replace(/\/+$/,'');
+  if(!db){ toast('กรุณาตั้งค่า Firebase URL ก่อนในหน้าตั้งค่า','error'); return; }
+  const el = document.getElementById('mnt-qr-sync-status');
+  if(el) el.textContent='กำลังตรวจสอบ...';
+  const r = await _mntFetchSubmissionsCore(false);
+  if(el){
+    if(!r.ok){ el.textContent='เกิดข้อผิดพลาด: '+r.reason; el.style.color='#c0392b'; }
+    else{
+      el.textContent = r.added>0 ? '✓ รับข้อมูลใหม่ '+r.added+' รายการแล้ว' : '✓ ไม่มีข้อมูลใหม่';
+      el.style.color = r.added>0 ? '#27ae60' : '#666';
+    }
+  }
+  if(r.ok && r.added>0){ toast('รับแจ้งซ่อมใหม่ '+r.added+' รายการ ✓'); renderMnt(); }
 }
 function _mntShowTab(tab){
   const c=document.getElementById('mnt-app-container');
@@ -6719,29 +6765,29 @@ async function showTenantPortalQR(){
   const val=document.getElementById('portal-room-sel').value;
   if(!val){ toast('กรุณาเลือกห้อง','error'); return; }
   const [roomId,roomNo_]=val.split('|');
-  const name=s.name||'ApartPro';
-  const addr=s.addr||'';
-  const tpl=DOC_STORE['tenant_portal'];
   const storageBucket=(s.firebase||'').replace('https://','').replace(/-default-rtdb.*$/,'') + '.appspot.com';
-  const formHtml=tpl.replace(/%%DB%%/g,db).replace(/%%NAME%%/g,name)
-    .replace(/%%ADDR%%/g,addr).replace(/%%ROOM_ID%%/g,roomId).replace(/%%ROOM_NO%%/g,roomNo_||'?')
-    .replace(/%%STORAGE_BUCKET%%/g,storageBucket);
 
   // Also sync payments to Firebase for tenant to read
   syncPaymentsToFirebase(db);
 
-  // Push portal to Firebase
-  try{ await fetch(db+'/ap_forms/portal_'+roomId+'.json',{method:'PUT',body:JSON.stringify(formHtml),headers:{'Content-Type':'application/json'}}); }catch(e){}
-
-  // Create loader
-  const loader='<!DOCTYPE html><html><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><style>body{background:#185FA5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:sans-serif;color:#fff}</style></head><body><p>กำลังโหลด...</p><script>fetch(\''+db+'/ap_forms/portal_'+roomId+'.json\').then(function(r){return r.json()}).then(function(h){document.open();document.write(h);document.close()})<\/script></body></html>';
-  const loaderUrl='data:text/html;charset=utf-8,'+encodeURIComponent(loader);
-  const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data='+encodeURIComponent(loaderUrl);
+  // ใช้ไฟล์ standalone จริงที่ host บน GitHub Pages แทนระบบ data: URL เดิม
+  // (data: URL ยาวเกินไปและมือถือหลายรุ่นบล็อกการเปิดจาก QR scanner)
+  // ส่งข้อมูลห้องผ่าน query string แทนการ embed ไว้ในไฟล์ตอนสร้าง
+  const qParams = new URLSearchParams({db:db, room:roomId, no:roomNo_||'?', bucket:storageBucket});
+  const url = 'https://vasawee.github.io/apartpro/tenant-portal.html?' + qParams.toString();
 
   document.getElementById('qr-title').textContent='พอร์ทัลผู้เช่า — ห้อง '+roomNo_;
   document.getElementById('qr-desc').textContent='ผู้เช่าสแกน QR นี้เพื่อดูบิลและส่งสลิป';
-  document.getElementById('qr-img').innerHTML='<img src="'+qrUrl+'" width="240" height="240" style="border-radius:8px;border:1px solid var(--border)">';
-  document.getElementById('qr-url').textContent='Firebase: '+db;
+  const qrImgEl=document.getElementById('qr-img');
+  qrImgEl.innerHTML='<canvas id="portal-qr-canvas" width="240" height="240"></canvas>';
+  if(typeof QRCode !== 'undefined'){
+    QRCode.toCanvas(document.getElementById('portal-qr-canvas'), url, {width:240,margin:2,color:{dark:'#000',light:'#fff'}}, function(err){
+      if(err) console.error('QR error:',err);
+    });
+  } else {
+    qrImgEl.innerHTML='<img src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data='+encodeURIComponent(url)+'" width="240" height="240" style="border-radius:8px;border:1px solid var(--border)">';
+  }
+  document.getElementById('qr-url').textContent=url;
   document.getElementById('qr-sync-status').textContent='';
   openModal('modal-qr');
 }
@@ -8826,6 +8872,20 @@ initFirebaseAuth();
 checkAutoRenew();
 checkRecurringExpenses();
 renderDashboard();
+
+// ── Auto-poll: รับแจ้งซ่อมจากผู้เช่า (QR) อัตโนมัติ ทุก 30 วินาที ──
+// ทำงานเงียบๆ พื้นหลัง ไม่ต้องกดปุ่มเอง ถ้าพบรายการใหม่จะ toast แจ้งเตือนและอัปเดตหน้าจอถ้าเปิดหน้าแจ้งซ่อมอยู่
+setInterval(async()=>{
+  const r = await _mntFetchSubmissionsCore(true);
+  if(r.ok && r.added>0){
+    toast('📥 มีแจ้งซ่อมใหม่เข้ามา '+r.added+' รายการ ✓');
+    updateBadges();
+    // อัปเดตหน้าจอทันทีถ้ากำลังเปิดหน้าแจ้งซ่อมอยู่
+    const mntPage = document.getElementById('page-maintenance');
+    if(mntPage && mntPage.classList.contains('active')) renderMnt();
+  }
+}, 30000);
+
 // Checklist type change
 document.getElementById('f-cl-type').addEventListener('change', renderClItems);
 // Rent adjust room change

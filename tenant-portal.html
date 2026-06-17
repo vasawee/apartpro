@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ห้องของคุณ — สมสุภาเพรส รัชดา</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:linear-gradient(135deg,#0C447C 0%,#185FA5 100%);min-height:100vh;padding:16px;color:#111}
+.card{background:#fff;border-radius:14px;max-width:420px;margin:0 auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.hdr{background:linear-gradient(135deg,#185FA5,#0C447C);color:#fff;padding:18px 20px}
+.hdr h2{font-size:18px;font-weight:700;margin-bottom:2px}
+.hdr small{opacity:.8;font-size:12px}
+.body{padding:18px}
+.room-pill{display:inline-block;background:#EAF3FF;color:#185FA5;font-size:22px;font-weight:700;padding:6px 20px;border-radius:30px;margin-bottom:14px;font-family:monospace}
+.bill-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px}
+.bill-row:last-child{border:none}
+.bill-total{display:flex;justify-content:space-between;padding:12px 0;font-size:17px;font-weight:700;border-top:2px solid #185FA5;margin-top:4px}
+.bill-total .amt{color:#185FA5}
+.due{background:#FFF8E6;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;font-size:13px;margin:12px 0;text-align:center}
+.section{font-size:13px;font-weight:600;color:#555;margin:16px 0 8px;display:flex;align-items:center;gap:6px}
+.upload-area{border:2px dashed #B0C4DE;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-area:hover{border-color:#185FA5;background:#F0F7FF}
+.upload-area img{max-width:100%;max-height:200px;border-radius:8px;margin-top:10px}
+input[type=file]{display:none}
+button{width:100%;padding:13px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:15px;font-family:inherit;font-weight:600;cursor:pointer;margin-top:10px}
+button:disabled{background:#9BB5D0}
+button.sec{background:#fff;color:#185FA5;border:2px solid #185FA5;margin-top:8px}
+.status{text-align:center;padding:12px;border-radius:8px;font-size:14px;margin-top:10px}
+.ok{background:#EAF3DE;color:#27500A}.err{background:#FCEBEB;color:#A32D2D}
+.loader{text-align:center;padding:30px;color:#fff;font-size:15px}
+.history{font-size:13px}
+.hist-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0}
+.bank-info{font-size:12.5px;color:#555;text-align:center;margin-top:6px}
+.pay-status-pill{display:inline-block;padding:3px 12px;border-radius:14px;font-size:12.5px;font-weight:600;margin-top:6px}
+</style></head><body>
+<div id="loading" class="loader">⏳ กำลังโหลดข้อมูล...</div>
+<div class="card" id="main-card" style="display:none">
+  <div class="hdr">
+    <h2 id="apt-name">สมสุภาเพรส รัชดา</h2>
+    <small id="apt-addr"></small>
+  </div>
+  <div class="body">
+    <div style="text-align:center">
+      <div id="room-no" class="room-pill">—</div>
+      <div id="tenant-name" style="font-size:15px;color:#555;margin-bottom:6px"></div>
+      <div id="pay-status" class="pay-status-pill"></div>
+    </div>
+    <div class="due" id="due-notice" style="display:none"></div>
+    <div class="section">📄 บิลเดือนนี้ <span id="bill-month" style="font-weight:400;color:#888"></span></div>
+    <div id="bill-section">
+      <div id="bill-items"></div>
+      <div class="bill-total"><span>รวมทั้งสิ้น</span><span class="amt" id="bill-total">฿0</span></div>
+      <div class="bank-info" id="bank-info"></div>
+    </div>
+    <div class="section">📎 แนบสลิปโอนเงิน</div>
+    <div class="upload-area" id="upload-area" onclick="document.getElementById('slip-input').click()">
+      <div>📸 กดเพื่อถ่ายรูปหรือเลือกสลิป</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">รองรับ JPG, PNG, PDF</div>
+      <img id="slip-preview" style="display:none">
+    </div>
+    <input type="file" id="slip-input" accept="image/*,application/pdf" capture="environment" onchange="previewSlip(this)">
+    <div style="margin:8px 0"><input id="slip-amount" type="number" placeholder="จำนวนเงิน (ไม่บังคับ)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px"></div>
+    <button id="btn-submit" onclick="submitSlip()" disabled>📤 ส่งหลักฐานการโอน</button>
+    <div id="submit-status"></div>
+    <div class="section">📋 ประวัติการชำระ (3 เดือนล่าสุด)</div>
+    <div id="pay-history" class="history"></div>
+  </div>
+</div>
+<script>
+// ── อ่านค่าจาก URL query string แทนการ hardcode ──
+// ใช้งานแบบ: tenant-portal.html?db=<firebase_url>&room=<room_id>&no=<room_no>&name=<apt_name>&bucket=<storage_bucket>
+var params = new URLSearchParams(window.location.search);
+var DB = params.get('db') || '';
+var ROOM_ID = params.get('room') || '';
+var ROOM_NO = params.get('no') || '?';
+var STORAGE_BUCKET = params.get('bucket') || '';
+var slipBase64 = '', slipType = '', slipFile = null;
+
+function fmt(n){ return (n||0).toLocaleString('th-TH'); }
+
+async function loadBill(){
+  if(!DB || !ROOM_ID){
+    document.getElementById('loading').innerHTML = '<div style="color:#fff">❌ ลิงก์ไม่ถูกต้อง (ไม่พบข้อมูลห้อง)</div>';
+    return;
+  }
+  try{
+    const r = await fetch(DB+'/tenant_portal/'+ROOM_ID+'/bill.json');
+    const bill = await r.json() || {};
+
+    document.getElementById('apt-name').textContent = bill.apartName || 'อพาร์ตเมนต์';
+    document.getElementById('room-no').textContent = ROOM_NO;
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main-card').style.display = 'block';
+
+    if(!bill.rent){
+      document.getElementById('bill-section').innerHTML = '<div style="text-align:center;padding:20px;color:#888">ยังไม่มีบิลเดือนนี้</div>';
+      return;
+    }
+    document.getElementById('tenant-name').textContent = bill.tenant || 'ผู้เช่า';
+    document.getElementById('bill-month').textContent = bill.month || '';
+
+    var rows = '';
+    rows += '<div class="bill-row"><span>ค่าเช่า</span><span>฿'+fmt(bill.rent)+'</span></div>';
+    if(bill.elec) rows += '<div class="bill-row"><span>ค่าไฟ</span><span>฿'+fmt(bill.elec)+'</span></div>';
+    if(bill.water) rows += '<div class="bill-row"><span>ค่าน้ำ</span><span>฿'+fmt(bill.water)+'</span></div>';
+    document.getElementById('bill-items').innerHTML = rows;
+    document.getElementById('bill-total').textContent = '฿'+fmt(bill.total);
+
+    var statusEl = document.getElementById('pay-status');
+    statusEl.textContent = bill.status || 'รอชำระ';
+    statusEl.style.background = bill.status==='ชำระแล้ว' ? '#EAF3DE' : bill.status==='ค้างชำระ' ? '#FCEBEB' : '#FAEEDA';
+    statusEl.style.color = bill.status==='ชำระแล้ว' ? '#3B6D11' : bill.status==='ค้างชำระ' ? '#A32D2D' : '#854F0B';
+
+    if(bill.bank){
+      document.getElementById('bank-info').textContent = 'โอนได้ที่: '+bill.bank+' ชื่อ '+(bill.bankname||'')+(bill.promptpay?' | PromptPay: '+bill.promptpay:'');
+    }
+  }catch(e){
+    document.getElementById('loading').innerHTML = '<div style="color:#fff">❌ โหลดข้อมูลไม่ได้<br><small>'+e.message+'</small></div>';
+  }
+}
+
+function previewSlip(input){
+  var file = input.files[0]; if(!file) return;
+  slipType = file.type;
+  slipFile = file;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    slipBase64 = e.target.result.split(',')[1];
+    var prev = document.getElementById('slip-preview');
+    if(file.type.startsWith('image/')){
+      prev.src = e.target.result; prev.style.display = 'block';
+    }
+    document.getElementById('btn-submit').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitSlip(){
+  if(!slipBase64){ return; }
+  var btn = document.getElementById('btn-submit');
+  var amtEl = document.getElementById('slip-amount');
+  var amount = amtEl ? amtEl.value.trim() : '';
+  btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  try{
+    var slipUrl = null;
+    if(STORAGE_BUCKET && slipFile){
+      var ext = slipFile.name.split('.').pop() || 'jpg';
+      var storagePath = 'tenant_slips/'+ROOM_ID+'/'+Date.now()+'.'+ext;
+      var uploadUrl = 'https://firebasestorage.googleapis.com/v0/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(storagePath)+'?uploadType=media';
+      var uploadRes = await fetch(uploadUrl, {method:'POST', body:slipFile, headers:{'Content-Type':slipFile.type}});
+      if(uploadRes.ok){
+        slipUrl = 'https://firebasestorage.googleapis.com/v0/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(storagePath)+'?alt=media';
+      }
+    }
+    var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipUrl:slipUrl||null, amount:amount||null, status:'รอตรวจสอบ'};
+    var key = 'slip_'+Date.now();
+    await fetch(DB+'/tenant_slips/'+ROOM_ID+'/'+key+'.json', {method:'PUT', body:JSON.stringify(data), headers:{'Content-Type':'application/json'}});
+    document.getElementById('submit-status').innerHTML = '<div class="status ok">✅ ส่งสลิปสำเร็จแล้ว! ทีมงานจะตรวจสอบและยืนยันภายใน 24 ชม.</div>';
+    btn.textContent = '✓ ส่งแล้ว';
+  }catch(e){
+    document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ส่งไม่สำเร็จ: '+e.message+'</div>';
+    btn.disabled = false; btn.textContent = '📤 ส่งหลักฐานการโอน';
+  }
+}
+
+loadBill();
+</script></body></html>
