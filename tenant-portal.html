@@ -153,23 +153,32 @@ function previewSlip(input){
     return;
   }
 
-  // รูปภาพ: บีบอัดผ่าน canvas ก่อน (resize ไม่เกิน 800px, JPEG quality 0.6)
+  // รูปภาพ: บีบอัดผ่าน canvas ก่อน (resize ไม่เกิน 640px, JPEG quality 0.5)
   // เพื่อให้ไฟล์เล็กพอสำหรับเก็บใน Realtime Database (ไม่ใช้ Firebase Storage)
   var img = new Image();
   var reader2 = new FileReader();
+  reader2.onerror = function(){
+    document.getElementById('submit-status').innerHTML = '<div class="status err">❌ อ่านไฟล์รูปไม่สำเร็จ ลองเลือกรูปใหม่อีกครั้ง</div>';
+  };
   reader2.onload = function(e){
+    img.onerror = function(){
+      document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ไม่สามารถประมวลผลรูปนี้ได้ ลองเลือกรูปอื่น</div>';
+    };
     img.onload = function(){
       var canvas = document.createElement('canvas');
-      var maxDim = 800;
+      var maxDim = 640;
       var w = img.width, h = img.height;
       if(w > h && w > maxDim){ h = h*(maxDim/w); w = maxDim; }
       else if(h > maxDim){ w = w*(maxDim/h); h = maxDim; }
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      var compressed = canvas.toDataURL('image/jpeg', 0.6);
+      var compressed = canvas.toDataURL('image/jpeg', 0.5);
       slipBase64 = compressed;
       prev.src = compressed; prev.style.display = 'block';
       document.getElementById('btn-submit').disabled = false;
+      // แสดงขนาดไฟล์หลังบีบอัด เพื่อช่วย debug หากยังส่งไม่สำเร็จ
+      var sizeKB = Math.round(compressed.length * 0.75 / 1024);
+      console.log('Compressed slip size:', sizeKB, 'KB');
     };
     img.src = e.target.result;
   };
@@ -182,18 +191,36 @@ async function submitSlip(){
   var amtEl = document.getElementById('slip-amount');
   var amount = amtEl ? amtEl.value.trim() : '';
   btn.disabled = true; btn.textContent = 'กำลังส่ง...';
-  try{
-    // เก็บรูปสลิป (บีบอัดแล้ว) เป็น base64 ตรงใน Realtime Database
-    // แทนการอัปโหลดไป Firebase Storage (ซึ่งต้องอัปเกรด plan ถึงใช้ได้)
-    var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipData:slipBase64||null, amount:amount||null, status:'รอตรวจสอบ'};
-    var key = 'slip_'+Date.now();
-    await fetch(DB+'/tenant_slips/'+ROOM_ID+'/'+key+'.json', {method:'PUT', body:JSON.stringify(data), headers:{'Content-Type':'application/json'}});
-    document.getElementById('submit-status').innerHTML = '<div class="status ok">✅ ส่งสลิปสำเร็จแล้ว! ทีมงานจะตรวจสอบและยืนยันภายใน 24 ชม.</div>';
-    btn.textContent = '✓ ส่งแล้ว';
-  }catch(e){
-    document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ส่งไม่สำเร็จ: '+e.message+'</div>';
-    btn.disabled = false; btn.textContent = '📤 ส่งหลักฐานการโอน';
+  document.getElementById('submit-status').innerHTML = '';
+
+  var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipData:slipBase64||null, amount:amount||null, status:'รอตรวจสอบ'};
+  var key = 'slip_'+Date.now();
+  var payload = JSON.stringify(data);
+
+  // ลองส่งสูงสุด 2 ครั้ง เผื่อ network สะดุดชั่วคราว (พบบ่อยบน mobile Safari ขณะอัปโหลดไฟล์ใหญ่)
+  var lastError = null;
+  for(var attempt=1; attempt<=2; attempt++){
+    try{
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function(){ controller.abort(); }, 20000);
+      var res = await fetch(DB+'/tenant_slips/'+ROOM_ID+'/'+key+'.json', {
+        method:'PUT', body:payload, headers:{'Content-Type':'application/json'},
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if(!res.ok){ throw new Error('เซิร์ฟเวอร์ตอบกลับ HTTP '+res.status); }
+      document.getElementById('submit-status').innerHTML = '<div class="status ok">✅ ส่งสลิปสำเร็จแล้ว! ทีมงานจะตรวจสอบและยืนยันภายใน 24 ชม.</div>';
+      btn.textContent = '✓ ส่งแล้ว';
+      return;
+    }catch(e){
+      lastError = e;
+      if(attempt < 2){ await new Promise(function(r){ setTimeout(r, 1500); }); }
+    }
   }
+  // ส่งไม่สำเร็จทั้ง 2 ครั้ง
+  var sizeKB = Math.round(payload.length * 0.75 / 1024);
+  document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ส่งไม่สำเร็จ: '+(lastError?lastError.message:'ไม่ทราบสาเหตุ')+'<br><small>ขนาดข้อมูล ~'+sizeKB+'KB — ลองเช็คสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง</small></div>';
+  btn.disabled = false; btn.textContent = '📤 ส่งหลักฐานการโอน';
 }
 
 async function submitMaintenance(){
