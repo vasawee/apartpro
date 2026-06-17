@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>แจ้งซ่อม — สมสุภาเพรส รัชดา</title>
+<style>*{box-sizing:border-box}body{font-family:'Sarabun',Arial,sans-serif;background:#f0f4f8;margin:0;padding:16px;color:#111}
+.card{background:#fff;border-radius:12px;padding:22px;max-width:440px;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+h2{color:#185FA5;margin:0 0 4px;font-size:20px;text-align:center}
+.sub{text-align:center;font-size:13px;color:#888;margin-bottom:18px}
+.fg{margin-bottom:14px}label{display:block;font-size:13px;color:#555;margin-bottom:5px;font-weight:600}
+input,select,textarea{width:100%;padding:11px 13px;border:1px solid #dde;border-radius:8px;font-size:15px;font-family:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.1)}
+textarea{min-height:90px;resize:vertical}
+button{width:100%;padding:14px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:16px;font-family:inherit;cursor:pointer;margin-top:6px;font-weight:600}
+button:disabled{background:#aaa}
+.success{color:#27500A;background:#EAF3DE;padding:14px;border-radius:8px;text-align:center;margin-top:12px;font-size:15px}
+.error{color:#A32D2D;background:#FCEBEB;padding:14px;border-radius:8px;text-align:center;margin-top:12px}</style></head>
+<body><div class="card">
+<h2>🔧 แจ้งซ่อม</h2><div class="sub">สมสุภาเพรส รัชดา</div>
+<div class="fg"><label>ห้องของคุณ *</label><input id="room" type="text" placeholder="เช่น 101"></div>
+<div class="fg"><label>ประเภทปัญหา *</label><select id="type">
+<option>แอร์</option><option>ประปา</option><option>ไฟฟ้า</option><option>ประตู/หน้าต่าง</option><option>อื่นๆ</option></select></div>
+<div class="fg"><label>รายละเอียด *</label><textarea id="detail" placeholder="อธิบายปัญหาที่พบ..."></textarea></div>
+<div class="fg"><label>ความเร่งด่วน</label><select id="priority"><option value="ปกติ">ปกติ</option><option value="เร่งด่วน">เร่งด่วน</option></select></div>
+<div class="fg"><label>เบอร์โทรติดต่อ</label><input id="phone" type="tel" placeholder="08x-xxx-xxxx"></div>
+<button id="btn" onclick="doSubmit()">📤 ส่งแจ้งซ่อม</button>
+<div id="st"></div></div>
+<script>
+var DB='https://apt-app-e29f1-default-rtdb.asia-southeast1.firebasedatabase.app/apartpro_s8x2k9';
+function doSubmit(){
+  var r=document.getElementById('room').value.trim();
+  var d=document.getElementById('detail').value.trim();
+  if(!r||!d){document.getElementById('st').innerHTML='<div class="error">กรุณากรอกห้องและรายละเอียด</div>';return;}
+  document.getElementById('btn').disabled=true;
+  document.getElementById('st').innerHTML='<div style="text-align:center;color:#888;margin-top:12px">กำลังส่ง...</div>';
+  var data={room:r,type:document.getElementById('type').value,detail:d,priority:document.getElementById('priority').value,phone:document.getElementById('phone').value,date:new Date().toISOString().split('T')[0],status:'รอดำเนินการ',source:'qr',ts:Date.now()};
+  fetch(DB+'/ap_submissions/maintenance.json',{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}})
+  .then(function(r){return r.json();})
+  .then(function(){document.getElementById('st').innerHTML='<div class="success">✅ ส่งแจ้งซ่อมสำเร็จแล้ว!<br>ทีมงานจะดำเนินการโดยเร็ว ขอบคุณครับ/ค่ะ</div>';})
+  .catch(function(){document.getElementById('btn').disabled=false;document.getElementById('st').innerHTML='<div class="error">เกิดข้อผิดพลาด กรุณาลองใหม่</div>';});
+}</script></body></html>

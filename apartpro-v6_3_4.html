@@ -2942,7 +2942,7 @@ function _mntDelete(id){ if(!confirm('ลบรายการนี้?')) retu
 function _mntDrawQR(){
   const canvas=document.getElementById('mnt-qr-canvas');
   if(!canvas) return;
-  const url='https://vasawee.github.io/apartpro/apartpro-v6_3_4.html';
+  const url='https://vasawee.github.io/apartpro/maintenance-report.html';
   document.getElementById('mnt-qr-url').textContent=url;
   // ใช้ qrcode.js library (โหลดไว้แล้วบรรทัด 10)
   if(typeof QRCode !== 'undefined'){
