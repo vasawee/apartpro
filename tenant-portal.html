@@ -63,6 +63,23 @@ button.sec{background:#fff;color:#185FA5;border:2px solid #185FA5;margin-top:8px
     <div id="submit-status"></div>
     <div class="section">📋 ประวัติการชำระ (3 เดือนล่าสุด)</div>
     <div id="pay-history" class="history"></div>
+
+    <div class="section" style="margin-top:22px;border-top:1px solid #eee;padding-top:18px">🔧 แจ้งซ่อม</div>
+    <select id="mnt-type" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+      <option value="แอร์">แอร์</option>
+      <option value="น้ำ/ประปา">น้ำ/ประปา</option>
+      <option value="ไฟฟ้า">ไฟฟ้า</option>
+      <option value="เฟอร์นิเจอร์">เฟอร์นิเจอร์</option>
+      <option value="อื่นๆ">อื่นๆ</option>
+    </select>
+    <textarea id="mnt-detail" placeholder="รายละเอียดปัญหา..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-height:70px;font-family:inherit;margin-bottom:8px"></textarea>
+    <select id="mnt-priority" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+      <option value="ปกติ">ความเร่งด่วน: ปกติ</option>
+      <option value="เร่งด่วน">ความเร่งด่วน: เร่งด่วน</option>
+    </select>
+    <input id="mnt-phone" type="tel" placeholder="เบอร์โทรติดต่อ" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+    <button onclick="submitMaintenance()" id="btn-mnt-submit">📨 ส่งแจ้งซ่อม</button>
+    <div id="mnt-submit-status"></div>
   </div>
 </div>
 <script>
@@ -159,6 +176,46 @@ async function submitSlip(){
   }catch(e){
     document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ส่งไม่สำเร็จ: '+e.message+'</div>';
     btn.disabled = false; btn.textContent = '📤 ส่งหลักฐานการโอน';
+  }
+}
+
+async function submitMaintenance(){
+  var typeEl=document.getElementById('mnt-type');
+  var detailEl=document.getElementById('mnt-detail');
+  var priorityEl=document.getElementById('mnt-priority');
+  var phoneEl=document.getElementById('mnt-phone');
+  var statusEl=document.getElementById('mnt-submit-status');
+  var btn=document.getElementById('btn-mnt-submit');
+
+  if(!detailEl.value.trim()){
+    statusEl.innerHTML='<div class="status err">กรุณากรอกรายละเอียดปัญหา</div>';
+    return;
+  }
+  if(!DB || !ROOM_ID){
+    statusEl.innerHTML='<div class="status err">ลิงก์ไม่ถูกต้อง (ไม่พบข้อมูลห้อง)</div>';
+    return;
+  }
+  btn.disabled=true; btn.textContent='กำลังส่ง...';
+  try{
+    var data={
+      room: ROOM_NO,
+      type: typeEl.value,
+      detail: detailEl.value.trim(),
+      priority: priorityEl.value,
+      phone: phoneEl.value.trim(),
+      date: new Date().toISOString().slice(0,10),
+      status: 'รอดำเนินการ',
+      source: 'qr',
+      ts: Date.now()
+    };
+    await fetch(DB+'/ap_submissions/maintenance.json',{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}});
+    statusEl.innerHTML='<div class="status ok">✅ ส่งแจ้งซ่อมสำเร็จแล้ว! ทีมงานจะดำเนินการโดยเร็ว</div>';
+    btn.textContent='✓ ส่งแล้ว';
+    detailEl.value=''; phoneEl.value='';
+    setTimeout(function(){ btn.disabled=false; btn.textContent='📨 ส่งแจ้งซ่อม'; }, 3000);
+  }catch(e){
+    statusEl.innerHTML='<div class="status err">❌ ส่งไม่สำเร็จ: '+e.message+'</div>';
+    btn.disabled=false; btn.textContent='📨 ส่งแจ้งซ่อม';
   }
 }
 
