@@ -139,16 +139,41 @@ function previewSlip(input){
   var file = input.files[0]; if(!file) return;
   slipType = file.type;
   slipFile = file;
-  var reader = new FileReader();
-  reader.onload = function(e){
-    slipBase64 = e.target.result.split(',')[1];
-    var prev = document.getElementById('slip-preview');
-    if(file.type.startsWith('image/')){
-      prev.src = e.target.result; prev.style.display = 'block';
-    }
-    document.getElementById('btn-submit').disabled = false;
+  var prev = document.getElementById('slip-preview');
+
+  if(file.type === 'application/pdf'){
+    // PDF เก็บแบบ base64 ตรงๆ ไม่บีบอัด (ไม่ใช่รูปภาพ ใช้ canvas ไม่ได้)
+    var reader = new FileReader();
+    reader.onload = function(e){
+      slipBase64 = e.target.result; // เก็บเป็น data URL เต็ม (มี mime type ติดมาด้วย)
+      prev.style.display = 'none';
+      document.getElementById('btn-submit').disabled = false;
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  // รูปภาพ: บีบอัดผ่าน canvas ก่อน (resize ไม่เกิน 800px, JPEG quality 0.6)
+  // เพื่อให้ไฟล์เล็กพอสำหรับเก็บใน Realtime Database (ไม่ใช้ Firebase Storage)
+  var img = new Image();
+  var reader2 = new FileReader();
+  reader2.onload = function(e){
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var maxDim = 800;
+      var w = img.width, h = img.height;
+      if(w > h && w > maxDim){ h = h*(maxDim/w); w = maxDim; }
+      else if(h > maxDim){ w = w*(maxDim/h); h = maxDim; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var compressed = canvas.toDataURL('image/jpeg', 0.6);
+      slipBase64 = compressed;
+      prev.src = compressed; prev.style.display = 'block';
+      document.getElementById('btn-submit').disabled = false;
+    };
+    img.src = e.target.result;
   };
-  reader.readAsDataURL(file);
+  reader2.readAsDataURL(file);
 }
 
 async function submitSlip(){
@@ -158,17 +183,9 @@ async function submitSlip(){
   var amount = amtEl ? amtEl.value.trim() : '';
   btn.disabled = true; btn.textContent = 'กำลังส่ง...';
   try{
-    var slipUrl = null;
-    if(STORAGE_BUCKET && slipFile){
-      var ext = slipFile.name.split('.').pop() || 'jpg';
-      var storagePath = 'tenant_slips/'+ROOM_ID+'/'+Date.now()+'.'+ext;
-      var uploadUrl = 'https://firebasestorage.googleapis.com/v0/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(storagePath)+'?uploadType=media';
-      var uploadRes = await fetch(uploadUrl, {method:'POST', body:slipFile, headers:{'Content-Type':slipFile.type}});
-      if(uploadRes.ok){
-        slipUrl = 'https://firebasestorage.googleapis.com/v0/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(storagePath)+'?alt=media';
-      }
-    }
-    var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipUrl:slipUrl||null, amount:amount||null, status:'รอตรวจสอบ'};
+    // เก็บรูปสลิป (บีบอัดแล้ว) เป็น base64 ตรงใน Realtime Database
+    // แทนการอัปโหลดไป Firebase Storage (ซึ่งต้องอัปเกรด plan ถึงใช้ได้)
+    var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipData:slipBase64||null, amount:amount||null, status:'รอตรวจสอบ'};
     var key = 'slip_'+Date.now();
     await fetch(DB+'/tenant_slips/'+ROOM_ID+'/'+key+'.json', {method:'PUT', body:JSON.stringify(data), headers:{'Content-Type':'application/json'}});
     document.getElementById('submit-status').innerHTML = '<div class="status ok">✅ ส่งสลิปสำเร็จแล้ว! ทีมงานจะตรวจสอบและยืนยันภายใน 24 ชม.</div>';
