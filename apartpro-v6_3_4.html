@@ -390,6 +390,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
   </div>
   <div class="card">
     <div class="card-head">
+      <div class="card-title">ค่าใช้จ่าย 6 เดือนล่าสุด</div>
+      <span class="pill p-rd" id="dash-exp-chart-total"></span>
+    </div>
+    <div id="dash-exp-chart" style="margin-top:8px"></div>
+    <div class="slabel" style="margin-top:14px">รายละเอียดค่าใช้จ่ายเดือนนี้ ตามหมวดหมู่</div>
+    <div id="dash-exp-breakdown" style="margin-top:6px"></div>
+  </div>
+  <div class="card">
+    <div class="card-head">
       <div class="card-title">สถานะห้องทั้งหมด</div>
       <div id="dash-legend" style="display:flex;gap:12px;font-size:12px;color:var(--text2)"></div>
     </div>
@@ -653,6 +662,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
         </div>
         <div class="fg"><label>วันที่ออกเอกสาร</label><input id="inv-date" type="date" oninput="renderInvPreview()"></div>
         <div class="fg"><label>เลขที่เอกสาร</label><input id="inv-docno" type="text" placeholder="B11213" oninput="renderInvPreview()"></div>
+        <div class="fg"><label>เลขที่ใบรับประกัน</label><input id="inv-guaranteeno" type="text" placeholder="เช่น 0404" oninput="renderInvPreview()"></div>
         <div class="btn-row" style="margin-top:8px">
           <button class="btn btn-pr" onclick="printInv(false)"><i class="ti ti-printer"></i> พิมพ์ / PDF</button>
           <button class="btn btn-sm" onclick="printInv(true)" title="2 ใบต่อหน้า A4 ประหยัดกระดาษ"><i class="ti ti-copy"></i> 2 ใบ/หน้า A4</button>
@@ -687,6 +697,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
     </button>
     <button class="settings-tab" onclick="switchSettingsTab(event, 'security')">
       <i class="ti ti-shield-lock"></i> ความปลอดภัย
+    </button>
+    <button class="settings-tab" onclick="switchSettingsTab(event, 'line')">
+      <i class="ti ti-brand-line"></i> LINE
     </button>
     <button class="settings-tab" onclick="switchSettingsTab(event, 'about')">
       <i class="ti ti-help-circle"></i> เกี่ยวกับ
@@ -960,6 +973,37 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
     </div>
   </div>
 
+  <!-- ═══ TAB: LINE ═══ -->
+  <div class="settings-tab-content" id="tab-line">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:16px">การแจ้งเตือนผ่าน LINE</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+        ⚠️ LINE Notify ถูกปิดให้บริการแล้วตั้งแต่ 31 มี.ค. 2025 — ระบบนี้ใช้ <b>LINE Messaging API</b> ผ่าน Cloudflare Worker ที่ตั้งค่าแยกต่างหากแทน
+      </p>
+      <form id="line-form">
+        <div class="fg">
+          <label>Cloudflare Worker URL <span style="font-size:10px;color:var(--text3)">(เช่น https://apartpro-line-relay.xxxxx.workers.dev)</span></label>
+          <input id="set-line-worker-url" type="text" placeholder="https://apartpro-line-relay.xxxxx.workers.dev" oninput="saveSettings()">
+        </div>
+        <div class="fg">
+          <label>Secret Key <span style="font-size:10px;color:var(--text3)">(ค่าเดียวกับที่ตั้งใน Cloudflare Worker → Variables)</span></label>
+          <input id="set-line-secret" type="password" placeholder="รหัสลับที่ตั้งไว้ใน Cloudflare" oninput="saveSettings()">
+        </div>
+        <div class="fg">
+          <label>LINE User ID สำหรับทดสอบ <span style="font-size:10px;color:var(--text3)">(User ID ของคุณเอง เพื่อทดสอบระบบ)</span></label>
+          <input id="set-line-test-id" type="text" placeholder="เช่น U1234567890abcdef..." oninput="saveSettings()">
+        </div>
+      </form>
+      <div class="fg">
+        <button class="btn btn-pr btn-sm" onclick="testLineNotify()"><i class="ti ti-send"></i> ทดสอบส่ง LINE</button>
+        <div id="line-status" style="margin-top:8px;font-size:13px;color:var(--text2)"></div>
+      </div>
+      <div style="margin-top:16px;background:var(--blue-50);border-radius:var(--r-md);padding:12px;font-size:12.5px;color:var(--text2);line-height:1.7">
+        💡 <b>วิธีหา LINE User ID ของผู้เช่าแต่ละห้อง:</b> ตั้งค่า LINE User ID ของผู้เช่าได้ที่หน้า "ห้องพัก" → แก้ไขห้อง → ช่อง "LINE User ID ของผู้เช่า" — ระบบจะส่งแจ้งเตือนค่าเช่า/แจ้งซ่อม/ใบเสร็จไปยังห้องที่กรอก LINE User ID ไว้เท่านั้น
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ TAB 5: ABOUT ═══ -->
   <div class="settings-tab-content" id="tab-about">
     <div class="card">
@@ -1102,10 +1146,7 @@ function toggleAutoBackup() {
     <div class="fg"><label>ช่องทางส่ง</label>
       <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
-          <input type="checkbox" id="send-line-bulk" checked> <i class="ti ti-brand-line" style="color:#06C755"></i> LINE Notify (Token ผู้เช่า)
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
-          <input type="checkbox" id="send-admin-line"> <i class="ti ti-message-2"></i> LINE แจ้ง Admin (สรุปรวม)
+          <input type="checkbox" id="send-line-bulk" checked> <i class="ti ti-brand-line" style="color:#06C755"></i> ส่งบิลผ่าน LINE (ตาม LINE User ID ของห้อง)
         </label>
       </div>
     </div>
@@ -1465,6 +1506,7 @@ function toggleAutoBackup() {
     </select>
   </div>
   <div class="fg"><label>หมายเหตุ</label><input id="f-room-note" type="text" placeholder="เช่น วิวสวน ชั้นสูง ฯลฯ"></div>
+  <div class="fg"><label>LINE User ID ของผู้เช่า <span style="font-size:10px;color:var(--text3)">(ไว้ส่งแจ้งเตือนผ่าน LINE — ไม่บังคับ)</span></label><input id="f-room-line-id" type="text" placeholder="เช่น U1234567890abcdef..."></div>
   <div class="modal-footer">
     <button class="btn" onclick="closeModal('modal-add-room')">ยกเลิก</button>
     <button class="btn btn-pr" onclick="saveRoom()"><i class="ti ti-check"></i> บันทึก</button>
@@ -1602,7 +1644,7 @@ function toggleAutoBackup() {
   </div>
   <div class="fgrow">
     <div class="fg"><label>เลขบัตรประชาชน</label><input id="f-con-idcard" type="text" placeholder="1-xxxx-xxxxx-xx-x" maxlength="17"></div>
-    <div class="fgrow"><div class="fg"><label>Line ID</label><input id="f-con-line" type="text" placeholder="@lineid"></div><div class="fg"><label>LINE Notify Token (ส่งบิลอัตโนมัติ)</label><input id="f-con-linetoken" type="text" placeholder="token ของผู้เช่า"></div></div>
+    <div class="fgrow"><div class="fg"><label>Line ID</label><input id="f-con-line" type="text" placeholder="@lineid"></div><div class="fg"><label>LINE Notify Token <span style="font-size:10px;color:var(--text3)">(เลิกใช้แล้ว — ตั้งค่า LINE User ID ที่หน้าห้องพักแทน)</span></label><input id="f-con-linetoken" type="text" placeholder="ไม่ใช้แล้ว"></div></div>
   </div>
   <div class="fg"><label>ที่อยู่ตามบัตร</label><input id="f-con-addr" type="text" placeholder="ที่อยู่ติดต่อ / ภูมิลำเนา"></div>
   <div class="fg"><label>อาชีพ / สถานที่ทำงาน</label><input id="f-con-job" type="text" placeholder="ไม่บังคับ"></div>
@@ -2175,6 +2217,25 @@ function fmt(n){ return Math.round(n||0).toLocaleString('th-TH'); }
 function today(){ return new Date().toISOString().split('T')[0]; }
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function currentMonth(){ const d=new Date(); return MONTHS[d.getMonth()]+' '+(d.getFullYear()+543); }
+// ── เลขที่ใบแจ้งหนี้ (รันต่อเนื่องตลอดไป ข้ามทุกเดือน ไม่รีเซ็ต ไม่ผูกกับเลขห้องจริง) ──
+// ใช้ร่วมกันระหว่าง "ทะเบียนค่าเช่ารายเดือน" และ "ฟอร์มใบแจ้งหนี้" เพื่อให้เลขไม่ซ้ำ/ไม่ขัดแย้งกัน
+// เก็บ log แบบถาวรใน localStorage: key = roomId|month → เลขที่ใบแจ้งหนี้ที่เคยออกให้แล้ว
+function getOrCreateInvoiceNo(roomId, mon){
+  if(!roomId || !mon) return '';
+  const invNoLog = LS.get('invoice_no_log') || {};
+  const key = roomId+'|'+mon;
+  if(invNoLog[key]) return invNoLog[key];
+  let maxSeq = 0;
+  Object.values(invNoLog).forEach(v=>{
+    const n = parseInt(String(v).replace(/^B/,''), 10);
+    if(!isNaN(n) && n>maxSeq) maxSeq = n;
+  });
+  if(maxSeq===0) maxSeq = 11421; // ห้องแรกสุดที่ยังไม่เคยออกเลขจะได้ B11422 (11421+1)
+  const newNo = 'B'+(maxSeq+1);
+  invNoLog[key] = newNo;
+  LS.set('invoice_no_log', invNoLog);
+  return newNo;
+}
 function initials(name){ const p=name.trim().split(' '); return p.length>1?(p[0][0]+p[1][0]).toUpperCase():name.slice(0,2).toUpperCase(); }
 function avColor(name){ const c=['bl','gr','am','rd','te']; return c[name.charCodeAt(0)%c.length]; }
 function pillClass(s){ return {ชำระแล้ว:'p-gr',รอชำระ:'p-am',ค้างชำระ:'p-rd',รอดำเนินการ:'p-bl',กำลังดำเนินการ:'p-am',เสร็จแล้ว:'p-gr',มีผู้เช่า:'p-bl',ว่าง:'p-gr',จอง:'p-am',ซ่อมบำรุง:'p-am',ปกติ:'p-gr',ใกล้หมด:'p-am',หมดแล้ว:'p-rd'}[s]||'p-gy'; }
@@ -2271,6 +2332,8 @@ function renderDashboard(){
 
   // ── Bar chart (SVG) 6 months ──
   renderDashChart(pays);
+  // ── Expense bar chart + breakdown (SVG) 6 months ──
+  renderDashExpenseChart();
 
   // ── Room grid ──
   const legend=[{cls:'occ',label:'มีผู้เช่า'},{cls:'vac',label:'ว่าง'},{cls:'bkd',label:'จอง'},{cls:'mnt',label:'ซ่อม'},{cls:'ovd',label:'ค้างชำระ'}];
@@ -2309,6 +2372,60 @@ function renderDashChart(pays){
     svgVals+=v?`<text x="${x+BAR_W/2}" y="${y-5}" text-anchor="middle" font-size="10" fill="${tcol}" font-weight="${i===5?'600':'400'}" font-family="IBM Plex Sans Thai,sans-serif">${Math.round(v/1000)}k</text>`:'';
   });
   (document.getElementById('dash-chart')||{innerHTML:''}).innerHTML=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">${svgBars}${svgLabels}${svgVals}</svg>`;
+}
+
+function renderDashExpenseChart(){
+  const exps=LS.get('expenses')||[];
+  const MONTH_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const MONTH_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const now=new Date();
+  const months=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({short:MONTH_TH[d.getMonth()],full:MONTH_FULL[d.getMonth()],year:d.getFullYear()+543,m:d.getMonth()});
+  }
+  const data=months.map(({full,year})=>{
+    const key=full+' '+year;
+    return exps.filter(e=>e.month===key).reduce((a,b)=>a+(b.amount||0),0);
+  });
+  const maxVal=Math.max(...data,1);
+  const total=data.reduce((a,b)=>a+b,0);
+  (document.getElementById('dash-exp-chart-total')||{textContent:''}).textContent='รวม 6 เดือน: ฿'+fmt(total);
+  const W=540,H=120,PAD=32,BAR_W=52,GAP=(W-PAD*2-BAR_W*6)/5;
+  let svgBars='',svgLabels='',svgVals='';
+  data.forEach((v,i)=>{
+    const x=PAD+i*(BAR_W+GAP);
+    const bh=v?Math.max(8,Math.round(v/maxVal*(H-28))):4;
+    const y=H-bh-18;
+    const col=i===5?'var(--red-600)':'var(--red-100)';
+    const tcol=i===5?'var(--red-600)':'var(--text2)';
+    svgBars+=`<rect x="${x}" y="${y}" width="${BAR_W}" height="${bh}" rx="4" fill="${col}" opacity="0.9"/>`;
+    svgLabels+=`<text x="${x+BAR_W/2}" y="${H-2}" text-anchor="middle" font-size="11" fill="var(--text3)" font-family="IBM Plex Sans Thai,sans-serif">${months[i].short}</text>`;
+    svgVals+=v?`<text x="${x+BAR_W/2}" y="${y-5}" text-anchor="middle" font-size="10" fill="${tcol}" font-weight="${i===5?'600':'400'}" font-family="IBM Plex Sans Thai,sans-serif">${Math.round(v/1000)}k</text>`:'';
+  });
+  (document.getElementById('dash-exp-chart')||{innerHTML:''}).innerHTML=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">${svgBars}${svgLabels}${svgVals}</svg>`;
+
+  // ── รายละเอียดค่าใช้จ่ายเดือนนี้ แยกตามหมวดหมู่ (เรียงมากไปน้อย) ──
+  const thisMonthKey=currentMonth();
+  const thisMonthExps=exps.filter(e=>e.month===thisMonthKey);
+  const byCat={};
+  thisMonthExps.forEach(e=>{ byCat[e.cat]=(byCat[e.cat]||0)+(e.amount||0); });
+  const catList=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const monthTotal=catList.reduce((a,[,v])=>a+v,0);
+  const breakdownEl=document.getElementById('dash-exp-breakdown');
+  if(breakdownEl){
+    breakdownEl.innerHTML=catList.length?catList.map(([cat,amt])=>{
+      const pct=monthTotal?Math.round(amt/monthTotal*100):0;
+      return `<div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>${cat}</span><span style="font-weight:600;color:var(--red-600)">฿${fmt(amt)} <span style="color:var(--text3);font-weight:400">(${pct}%)</span></span>
+        </div>
+        <div style="background:var(--gray-100);border-radius:6px;height:6px;overflow:hidden">
+          <div style="background:var(--red-400,#f87171);height:100%;width:${pct}%"></div>
+        </div>
+      </div>`;
+    }).join(''):'<div class="empty"><i class="ti ti-receipt-off"></i><div class="empty-title">ยังไม่มีรายจ่ายเดือนนี้</div></div>';
+  }
 }
 
 
@@ -2360,10 +2477,8 @@ function autoCreatePayments(){
   const sortedToCreate=[...toCreate].sort((a,b)=>(a.no||'').localeCompare(b.no||'',undefined,{numeric:true}));
 
   sortedToCreate.forEach(r=>{
-    const cons=LS.get('contracts')||[];
-    const activeContract=cons.filter(c=>c.room===r.id&&c.status!=='หมดแล้ว').slice(-1)[0];
-    // ค่าเช่า: ใช้จากสัญญาก่อน แล้วค่อย fallback ไปข้อมูลห้อง
-    const rentAmt=+(activeContract?.rent)||+(r.rent)||0;
+    // ค่าเช่า: ดึงจากข้อมูลห้องเท่านั้น (ไม่ดึงจากสัญญาเช่าอีกต่อไป)
+    const rentAmt=+(r.rent)||0;
 
     // ดึงค่าน้ำ-ค่าไฟของเดือนนี้ก่อน (match id หรือเลขห้อง) ไม่มีถึง fallback เดือนล่าสุด
     const utilThisMonth=utils.filter(u=>((u.room===r.id)||(String(u.room)===String(r.no)))&&u.month===month).slice(-1)[0];
@@ -2489,6 +2604,7 @@ function openNewRoomModal(){
   document.getElementById('f-room-type').innerHTML=roomTypeOptions('');
   document.getElementById('f-room-status').value='ว่าง';
   document.getElementById('f-room-note').value='';
+  if(document.getElementById('f-room-line-id')) document.getElementById('f-room-line-id').value='';
   openModal('modal-add-room');
 }
 function saveRoom(){
@@ -2504,6 +2620,7 @@ function saveRoom(){
     size: +document.getElementById('f-room-size').value||0,
     status: document.getElementById('f-room-status').value,
     note: document.getElementById('f-room-note').value.trim(),
+    lineUserId: document.getElementById('f-room-line-id')?.value.trim()||'',
     // preserve tenant info from contract (don't overwrite)
     tenant: existing?.tenant||'',
     phone: existing?.phone||'',
@@ -2531,6 +2648,7 @@ function editRoom(id){
   document.getElementById('f-room-size').value = r.size||'';
   document.getElementById('f-room-status').value = r.status||'ว่าง';
   document.getElementById('f-room-note').value = r.note||'';
+  if(document.getElementById('f-room-line-id')) document.getElementById('f-room-line-id').value = r.lineUserId||'';
   openModal('modal-add-room');
 }
 function deleteRoom(id){
@@ -2558,22 +2676,12 @@ function fillPayFromRoom(){
   const rooms = LS.get('rooms')||[];
   const r = rooms.find(x=>x.id===id);
   if(!r) return;
-  const cons = LS.get('contracts')||[];
-  const con = cons.filter(c=>c.room===id&&c.status!=='หมดแล้ว').slice(-1)[0];
-  // ค่าเช่า: สัญญา active ก่อน → ข้อมูลห้อง
-  const rent = +(r.rent) || +(con?.rent) || 0;
+  // ค่าเช่า: ดึงจากข้อมูลห้องเท่านั้น (ไม่ดึงจากสัญญาเช่าอีกต่อไป)
+  const rent = +(r.rent) || 0;
   document.getElementById('f-pay-tenant').value = getTenantForRoom(id)||r.tenant||'';
   document.getElementById('f-pay-rent').value = rent;
-  // แสดง hint แหล่งที่มา
   const hint = document.getElementById('f-pay-rent-hint');
-  if(hint){
-    if(con?.rent && +con.rent !== +r.rent){
-      hint.textContent = '⚠️ ห้อง ฿'+fmt(r.rent)+' / สัญญา ฿'+fmt(con.rent)+' — ใช้จากห้อง';
-      hint.style.display='block';
-    } else {
-      hint.style.display='none';
-    }
-  }
+  if(hint) hint.style.display='none';
   fillUtilIntoPayForm();
 }
 function fillUtilIntoPayForm(){
@@ -2980,7 +3088,28 @@ function _mntSubmit(){
   document.getElementById('mnt-app-container').dataset.tab='list'; renderMntApp();
 }
 function _mntToggle(id){ _mntState.openId=_mntState.openId===id?null:id; renderMntApp(); }
-function _mntUpdateStatus(id,status){ const mnts=LS.get('maintenance')||[]; const m=mnts.find(x=>x.id===id); if(m){m.status=status;LS.set('maintenance',mnts);updateBadges();renderMntApp();} }
+function _mntUpdateStatus(id,status){
+  const mnts=LS.get('maintenance')||[];
+  const m=mnts.find(x=>x.id===id);
+  if(m){
+    const prevStatus=m.status;
+    m.status=status;
+    LS.set('maintenance',mnts);
+    updateBadges();
+    renderMntApp();
+    if(prevStatus!==status && (status==='กำลังดำเนินการ'||status==='เสร็จแล้ว')){
+      const rooms=LS.get('rooms')||[];
+      const room=rooms.find(r=>r.id===m.room) || rooms.find(r=>String(r.no)===String(m.room));
+      if(room?.lineUserId){
+        const s=LS.get('settings')||{};
+        const msg = status==='กำลังดำเนินการ'
+          ? '🔧 แจ้งซ่อม — '+(s.name||'')+'\nห้อง '+(room.no||m.room)+'\nรายการ: '+(m.type||'')+' — '+(m.detail||'')+'\n\n👷 ทีมงานรับเรื่องแล้ว กำลังดำเนินการครับ/ค่ะ'
+          : '✅ แจ้งซ่อม — '+(s.name||'')+'\nห้อง '+(room.no||m.room)+'\nรายการ: '+(m.type||'')+' — '+(m.detail||'')+'\n\nงานซ่อมเสร็จเรียบร้อยแล้วครับ/ค่ะ ขอบคุณที่แจ้งให้ทราบ';
+        sendLineMessaging(room.lineUserId, msg);
+      }
+    }
+  }
+}
 function _mntSetCost(id){ const cost=prompt('ค่าใช้จ่าย (บาท):'); if(cost!==null){const mnts=LS.get('maintenance')||[];const m=mnts.find(x=>x.id===id);if(m){m.cost=+cost||0;LS.set('maintenance',mnts);renderMntApp();}}}
 function _mntSetTech(id){ const tech=prompt('ชื่อช่าง:'); if(tech!==null){const mnts=LS.get('maintenance')||[];const m=mnts.find(x=>x.id===id);if(m){m.tech=tech;LS.set('maintenance',mnts);renderMntApp();}}}
 function _mntDelete(id){ if(!confirm('ลบรายการนี้?')) return; LS.set('maintenance',(LS.get('maintenance')||[]).filter(x=>x.id!==id)); updateBadges(); renderMntApp(); toast('ลบแล้ว'); }
@@ -3057,7 +3186,32 @@ function renderMnt(){
   fillRoomSelect('f-mnt-room');
   document.getElementById('f-mnt-date').value=today();
 }
-function updateMntStatus(id,status){ const mnts=LS.get('maintenance')||[]; const i=mnts.findIndex(m=>m.id===id); if(i>=0){mnts[i].status=status;LS.set('maintenance',mnts);renderMnt();updateBadges();toast('อัปเดตสถานะแล้ว');} }
+function updateMntStatus(id,status){
+  const mnts=LS.get('maintenance')||[];
+  const i=mnts.findIndex(m=>m.id===id);
+  if(i>=0){
+    const prevStatus=mnts[i].status;
+    mnts[i].status=status;
+    LS.set('maintenance',mnts);
+    renderMnt();
+    updateBadges();
+    toast('อัปเดตสถานะแล้ว');
+    // ── แจ้งผู้เช่าผ่าน LINE เมื่อสถานะเปลี่ยนเป็น "กำลังดำเนินการ" หรือ "เสร็จแล้ว" ──
+    // m.room อาจเป็น room ID (จากฟอร์มในแอป) หรือเลขห้องตรงๆ (จาก QR) จึงค้นหาทั้งสองแบบ
+    if(prevStatus!==status && (status==='กำลังดำเนินการ'||status==='เสร็จแล้ว')){
+      const m=mnts[i];
+      const rooms=LS.get('rooms')||[];
+      const room=rooms.find(r=>r.id===m.room) || rooms.find(r=>String(r.no)===String(m.room));
+      if(room?.lineUserId){
+        const s=LS.get('settings')||{};
+        const msg = status==='กำลังดำเนินการ'
+          ? '🔧 แจ้งซ่อม — '+(s.name||'')+'\nห้อง '+(room.no||m.room)+'\nรายการ: '+(m.type||'')+' — '+(m.detail||'')+'\n\n👷 ทีมงานรับเรื่องแล้ว กำลังดำเนินการครับ/ค่ะ'
+          : '✅ แจ้งซ่อม — '+(s.name||'')+'\nห้อง '+(room.no||m.room)+'\nรายการ: '+(m.type||'')+' — '+(m.detail||'')+'\n\nงานซ่อมเสร็จเรียบร้อยแล้วครับ/ค่ะ ขอบคุณที่แจ้งให้ทราบ';
+        sendLineMessaging(room.lineUserId, msg);
+      }
+    }
+  }
+}
 function saveMnt(){
   const mnts=LS.get('maintenance')||[];
   mnts.push({id:uid('MNT'),room:document.getElementById('f-mnt-room').value,type:document.getElementById('f-mnt-type').value,detail:document.getElementById('f-mnt-detail').value.trim(),priority:document.getElementById('f-mnt-priority').value,tech:document.getElementById('f-mnt-tech').value.trim(),status:document.getElementById('f-mnt-status').value,date:document.getElementById('f-mnt-date').value,cost:+document.getElementById('f-mnt-cost').value||0});
@@ -3927,8 +4081,13 @@ function fillInvFromRoom(){
     document.getElementById('inv-e2').value = 0;
     document.getElementById('inv-month').value = currentMonth();
   }
-  // Auto doc number
-  const docNo = (document.getElementById('inv-type').value==='invoice'?'INV':'REC')+'-'+r?.no+'-'+Date.now().toString(36).toUpperCase().slice(-4);
+  // Auto doc number — ใบแจ้งหนี้ใช้เลขรันต่อเนื่อง B11422... (ระบบเดียวกับทะเบียนค่าเช่ารายเดือน)
+  // ใบเสร็จยังคงใช้รูปแบบสุ่มเดิม (คนละระบบเอกสาร)
+  const isInvType = document.getElementById('inv-type').value==='invoice';
+  const invMonth = document.getElementById('inv-month').value || currentMonth();
+  const docNo = isInvType
+    ? getOrCreateInvoiceNo(id, invMonth)
+    : 'REC-'+r?.no+'-'+Date.now().toString(36).toUpperCase().slice(-4);
   document.getElementById('inv-docno').value = docNo;
   renderInvPreview();
 }
@@ -3956,7 +4115,7 @@ function makeQRDataURL(text){
   return 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(text);
 }
 
-function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s){
+function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo){
   const dObj=new Date(dateVal);
   const dateSlash=dObj.getDate()+'/'+(dObj.getMonth()+1)+'/'+(dObj.getFullYear()+543);
   const vatRate=+(s.vat||7)||7;
@@ -3996,8 +4155,8 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
 
   const CSS='<style>@import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap");*{box-sizing:border-box;margin:0;padding:0}body,td,div,p{font-family:Sarabun,sans-serif}'
     +'.inv{max-width:720px;margin:0 auto;background:#fff;border:1px solid #333;font-size:13px}'
-    +'.hdr{display:grid;grid-template-columns:130px 1fr 130px;border-bottom:1px solid #333}'
-    +'.logo{background:#8a9bd4;color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;padding:8px}'
+    +'.hdr{display:grid;grid-template-columns:130px 1fr;border-bottom:1px solid #333}'
+    +'.logo{background:#8a9bd4;color:#fff;font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3;padding:8px}'
     +'.cohead{text-align:center;padding:10px 8px}.cohead h2{font-size:18px;font-weight:700;margin-bottom:4px}.cohead p{font-size:12px;line-height:1.6}'
     +'.title{text-align:center;font-size:16px;font-weight:700;padding:8px;text-decoration:underline;border-bottom:1px solid #333}'
     +'.meta{display:grid;grid-template-columns:1.6fr .8fr 1fr 1fr;border-bottom:1px solid #333}'
@@ -4012,14 +4171,11 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
     +'.docno{font-size:13px;color:#333}.sigbox{text-align:center}.sigline2{margin-top:30px;border-top:1px dotted #333;padding-top:3px;min-width:160px}'
     +'@media print{body{margin:0}.inv{border:1px solid #000}}</style>';
 
-  const logoName=(s.name||'').replace('บริษัท','').replace('จำกัด','').trim()||'PLACE';
-
   document.getElementById('inv-preview-card').innerHTML=CSS
     +'<div class="inv">'
     +'<div class="hdr">'
-      +'<div class="logo">'+logoName+'</div>'
-      +'<div class="cohead"><h2>'+(s.name||'-')+'</h2><p>'+(s.addr||'')+'<br>หมายเลขประจำตัวผู้เสียภาษี '+(s.taxid||'-')+'</p></div>'
-      +'<div class="logo">'+logoName+'</div>'
+      +'<div class="logo">SOMSUPA<br>PLACE</div>'
+      +'<div class="cohead"><h2>บริษัท สี่เก้าห้า จำกัด</h2><p>'+(s.addr||'')+'<br>หมายเลขประจำตัวผู้เสียภาษี '+(s.taxid||'-')+'</p></div>'
     +'</div>'
     +'<div class="title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>'
     +'<div class="meta">'
@@ -4053,7 +4209,7 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
       +'</div>'
     +'</div>'
     +'<div class="foot">'
-      +'<div class="docno">'+(s.docPrefix||'A')+docNo+'</div>'
+      +'<div class="docno">'+(guaranteeNo?(s.docPrefix||'A')+guaranteeNo:(s.docPrefix||'A')+docNo)+'</div>'
       +'<div class="sigbox"><div class="sigline2">ผู้รับเงิน</div></div>'
     +'</div>'
     +'</div>';
@@ -4105,6 +4261,7 @@ function renderInvPreview(){
   const total = rent + water + elec + common + other;
   const dateVal = document.getElementById('inv-date').value || today();
   const docNo = document.getElementById('inv-docno').value || (isInv?'INV':'REC')+'-'+Date.now().toString(36).toUpperCase().slice(-6);
+  const guaranteeNo = document.getElementById('inv-guaranteeno')?.value.trim() || '';
   // Format date TH
   const dObj = new Date(dateVal);
   const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -4224,7 +4381,7 @@ function renderInvPreview(){
   const bankInfo = s.bank ? 'บัญชี: '+( s.bankname?s.bankname+' ':'')+s.bank : '';
   const penaltyNote = 'กำหนดชำระไม่เกินวันที่ 5 ของเดือน หากเกินกำหนดคิดค่าปรับ 500 บาท/เดือน';
 
-  if(isTax){ renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s); return; }
+  if(isTax){ renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo); return; }
 
   document.getElementById('inv-preview-card').innerHTML = INV_CSS + '<div class="inv-wrap">'
   +'<div class="inv-box">'
@@ -4474,12 +4631,14 @@ function renderSettings(){
   if(document.getElementById('set-total-tenants')) document.getElementById('set-total-tenants').textContent=(LS.get('rooms')||[]).filter(r=>r.tenant).length+' คน';
   if(document.getElementById('set-firebase')) document.getElementById('set-firebase').value=s.firebase||'';
   if(document.getElementById('set-firebase-apikey')) document.getElementById('set-firebase-apikey').value=s.firebaseApiKey||'';
-  if(document.getElementById('set-line-token')) document.getElementById('set-line-token').value=s['line-token']||'';
   if(document.getElementById('set-apikey')) document.getElementById('set-apikey').value=s['api-key']||'';
   if(document.getElementById('set-taxid')) document.getElementById('set-taxid').value=s.taxid||'';
   if(document.getElementById('set-branch')) document.getElementById('set-branch').value=s.branch||'สำนักงานใหญ่';
   if(document.getElementById('set-vat')) document.getElementById('set-vat').value=s.vat||'0';
   if(document.getElementById('set-furniture-pct')) document.getElementById('set-furniture-pct').value=s.furniturePct||'50';
+  if(document.getElementById('set-line-worker-url')) document.getElementById('set-line-worker-url').value=s.lineWorkerUrl||'';
+  if(document.getElementById('set-line-secret')) document.getElementById('set-line-secret').value=s.lineSecretKey||'';
+  if(document.getElementById('set-line-test-id')) document.getElementById('set-line-test-id').value=s.lineTestId||'';
 }
 function saveSettings(){
   const s=LS.get('settings')||{};
@@ -4495,12 +4654,14 @@ function saveSettings(){
   s.roomTypes=document.getElementById('set-room-types')?.value||s.roomTypes||'ห้องปกติ,ห้องมีตู้เย็น,ห้องพิเศษ';
   s.firebase=document.getElementById('set-firebase')?.value||s.firebase||'';
   s.firebaseApiKey=document.getElementById('set-firebase-apikey')?.value||s.firebaseApiKey||'';
-  s['line-token']=document.getElementById('set-line-token')?.value||s['line-token']||'';
   s['api-key']=document.getElementById('set-apikey')?.value||s['api-key']||'';
   s.taxid=document.getElementById('set-taxid')?.value||s.taxid||'';
   s.branch=document.getElementById('set-branch')?.value||s.branch||'สำนักงานใหญ่';
   s.vat=document.getElementById('set-vat')?.value||s.vat||'0';
   s.furniturePct=document.getElementById('set-furniture-pct')?.value||s.furniturePct||'50';
+  s.lineWorkerUrl=document.getElementById('set-line-worker-url')?.value||s.lineWorkerUrl||'';
+  s.lineSecretKey=document.getElementById('set-line-secret')?.value||s.lineSecretKey||'';
+  s.lineTestId=document.getElementById('set-line-test-id')?.value||s.lineTestId||'';
   LS.set('settings',s);
   const logoEl=document.querySelector('.sb-logo-name');
   if(logoEl) logoEl.innerHTML=`<i class="ti ti-building"></i> ${s.name||'ApartPro'}`;
@@ -5776,41 +5937,49 @@ function lineStatus(msg, ok){
   el.style.color = ok===true?'var(--green-600)':ok===false?'var(--red-600)':'var(--text2)';
   el.textContent = msg;
 }
-async function sendLine(token, message){
-  if(!token) return {ok:false, error:'ไม่มี token'};
+// ── LINE Messaging API ผ่าน Cloudflare Worker relay ──
+// หมายเหตุ: LINE Notify (notify-api.line.me) ถูกปิดให้บริการแล้วตั้งแต่ 31 มี.ค. 2025
+// ระบบใหม่นี้ใช้ LINE Messaging API ผ่าน Cloudflare Worker ที่ตั้งค่าไว้แทน
+// ส่งข้อความหาผู้เช่ารายคน (ต้องมี LINE User ID ของห้องนั้น ไม่ใช่ group token แบบเดิม)
+async function sendLineMessaging(lineUserId, message){
+  const s = LS.get('settings')||{};
+  const workerUrl = (s.lineWorkerUrl||'').trim().replace(/\/+$/,'');
+  const secret = s.lineSecretKey||'';
+  if(!workerUrl) return {ok:false, error:'ยังไม่ได้ตั้งค่า Cloudflare Worker URL'};
+  if(!secret) return {ok:false, error:'ยังไม่ได้ตั้งค่า Secret Key'};
+  if(!lineUserId) return {ok:false, error:'ไม่มี LINE User ID ของผู้รับ'};
   try{
-    // Use corsproxy to bypass CORS for Line Notify API
-    const proxyUrl = 'https://corsproxy.io/?'+encodeURIComponent('https://notify-api.line.me/api/notify');
-    const form = new URLSearchParams();
-    form.append('message', message);
-    const r = await fetch(proxyUrl, {
+    const r = await fetch(workerUrl, {
       method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/x-www-form-urlencoded'},
-      body: form.toString()
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ secret, lineUserId, message })
     });
     const data = await r.json().catch(()=>({}));
-    return {ok: r.ok || data.status===200, status: r.status, data};
+    return {ok: r.ok && data.ok, status:r.status, data};
   }catch(e){
     return {ok:false, error:e.message};
   }
 }
+// ฟังก์ชันเดิม sendLine() ใช้ LINE Notify ซึ่งปิดบริการแล้ว — เก็บไว้เผื่อมีโค้ดอื่นเรียกใช้
+// แต่จะคืนค่า error ทันทีแทนที่จะพยายามยิงไป endpoint ที่ตายแล้ว
+async function sendLine(token, message){
+  return {ok:false, error:'LINE Notify ถูกปิดให้บริการแล้วตั้งแต่ 31 มี.ค. 2025 กรุณาใช้ระบบ LINE Messaging API แทน (ตั้งค่าใน Settings → LINE)'};
+}
 async function testLineNotify(){
   const s = LS.get('settings')||{};
-  const token = s['line-token']||s.lineToken||document.getElementById('set-line-token')?.value||'';
-  if(!token){ lineStatus('กรุณาใส่ Line Notify Token ก่อน', false); return; }
+  const testId = document.getElementById('set-line-test-id')?.value.trim()||s.lineTestId||'';
+  if(!testId){ lineStatus('กรุณาใส่ LINE User ID สำหรับทดสอบก่อน', false); return; }
   lineStatus('กำลังส่งทดสอบ...', null);
-  const res = await sendLine(token, '\n✅ ApartPro — ทดสอบการแจ้งเตือน\nระบบพร้อมใช้งานแล้ว!');
+  const res = await sendLineMessaging(testId, '✅ ApartPro — ทดสอบการแจ้งเตือน\nระบบ LINE Messaging API พร้อมใช้งานแล้ว!');
   if(res.ok){
-    lineStatus('✓ ส่งสำเร็จ! เช็ค Line ได้เลย', true);
-    toast('ส่ง Line Notify สำเร็จ ✓');
+    lineStatus('✓ ส่งสำเร็จ! เช็ค LINE ได้เลย', true);
+    toast('ส่ง LINE สำเร็จ ✓');
   } else {
-    lineStatus('❌ ส่งไม่สำเร็จ: '+(res.error||'status '+res.status)+' — ตรวจสอบ token อีกครั้ง', false);
+    lineStatus('❌ ส่งไม่สำเร็จ: '+(res.error||'status '+res.status), false);
   }
 }
 async function sendRentReminder(){
   const s = LS.get('settings')||{};
-  const token = s['line-token']||s.lineToken||'';
-  if(!token){ lineStatus('กรุณาใส่ Line Notify Token ก่อน', false); return; }
   const rooms = (LS.get('rooms')||[]).filter(r=>r.status==='มีผู้เช่า');
   const pays = LS.get('payments')||[];
   const month = currentMonth();
@@ -5819,32 +5988,46 @@ async function sendRentReminder(){
     return !p.length || p.some(x=>x.status!=='ชำระแล้ว');
   });
   if(!unpaid.length){ toast('ทุกห้องชำระแล้วเดือนนี้ ✓'); return; }
+  const withLine = unpaid.filter(r=>r.lineUserId);
+  if(!withLine.length){ lineStatus('ไม่มีห้องที่ค้างชำระตั้งค่า LINE User ID ไว้เลย', false); return; }
   lineStatus('กำลังส่ง...', null);
   const pp = s.promptpay ? '\nPromptPay: '+s.promptpay : '';
   const bank = s.bank ? '\nโอน: '+s.bank+' ('+s.bankname+')' : '';
-  const msg = '\n📋 แจ้งเตือนค่าเช่า — '+s.name
-    +'\nประจำเดือน '+month
-    +'\n\nห้องที่ยังไม่ชำระ ('+unpaid.length+' ห้อง):\n'
-    +unpaid.map(r=>'• ห้อง '+r.no+' '+( getTenantForRoom(r.id)||r.tenant||'')+' ฿'+fmt(r.rent)).join('\n')
-    +'\n\nกรุณาชำระภายในวันที่ 5 ของเดือน'+bank+pp;
-  const res = await sendLine(token, msg);
-  if(res.ok){ lineStatus('✓ ส่งแจ้งเตือนค่าเช่า '+unpaid.length+' ห้องแล้ว', true); toast('ส่ง Line Notify สำเร็จ ✓'); }
-  else { lineStatus('❌ ส่งไม่สำเร็จ: '+(res.error||res.status), false); }
+  let sent=0;
+  for(const r of withLine){
+    const tenant = getTenantForRoom(r.id)||r.tenant||'';
+    const msg = '📋 แจ้งเตือนค่าเช่า — '+s.name
+      +'\nห้อง '+r.no+' คุณ'+tenant
+      +'\nประจำเดือน '+month
+      +'\n💰 ค่าเช่า ฿'+fmt(r.rent)
+      +'\n\nกรุณาชำระภายในวันที่ 5 ของเดือน'+bank+pp;
+    const res = await sendLineMessaging(r.lineUserId, msg);
+    if(res.ok) sent++;
+    await new Promise(res=>setTimeout(res,600));
+  }
+  lineStatus('✓ ส่งแจ้งเตือนค่าเช่า '+sent+'/'+withLine.length+' ห้องแล้ว ('+(unpaid.length-withLine.length)+' ห้องไม่มี LINE User ID)', sent>0);
+  if(sent>0) toast('ส่งแจ้งเตือนค่าเช่า '+sent+' ห้องแล้ว ✓');
 }
 async function sendOverdueReminder(){
   const s = LS.get('settings')||{};
-  const token = s['line-token']||s.lineToken||'';
-  if(!token){ lineStatus('กรุณาใส่ Line Notify Token ก่อน', false); return; }
   const pays = (LS.get('payments')||[]).filter(p=>p.status==='ค้างชำระ');
   if(!pays.length){ toast('ไม่มีค้างชำระ ✓'); return; }
+  const rooms = LS.get('rooms')||[];
   lineStatus('กำลังส่ง...', null);
-  const msg = '\n⚠️ แจ้งเตือนค้างชำระ — '+s.name
-    +'\n\nห้องที่ค้างชำระ ('+pays.length+' ราย):\n'
-    +pays.map(p=>'• ห้อง '+roomNo(p.room)+' '+p.tenant+' ฿'+fmt(p.total)+' ('+p.month+')').join('\n')
-    +'\n\nกรุณาชำระโดยด่วน หรือติดต่อ '+s.tel;
-  const res = await sendLine(token, msg);
-  if(res.ok){ lineStatus('✓ ส่งแจ้งเตือนค้างชำระ '+pays.length+' ราย แล้ว', true); toast('ส่ง Line Notify สำเร็จ ✓'); }
-  else { lineStatus('❌ ส่งไม่สำเร็จ: '+(res.error||res.status), false); }
+  let sent=0, noLine=0;
+  for(const p of pays){
+    const room = rooms.find(r=>r.id===p.room);
+    if(!room?.lineUserId){ noLine++; continue; }
+    const msg = '⚠️ แจ้งเตือนค้างชำระ — '+s.name
+      +'\nห้อง '+roomNo(p.room)+' คุณ'+p.tenant
+      +'\n💰 ค้างชำระ ฿'+fmt(p.total)+' ('+p.month+')'
+      +'\n\nกรุณาชำระโดยด่วน หรือติดต่อ '+s.tel;
+    const res = await sendLineMessaging(room.lineUserId, msg);
+    if(res.ok) sent++;
+    await new Promise(res=>setTimeout(res,600));
+  }
+  lineStatus('✓ ส่งแจ้งเตือนค้างชำระ '+sent+'/'+pays.length+' ราย แล้ว'+(noLine?' ('+noLine+' ห้องไม่มี LINE User ID)':''), sent>0);
+  if(sent>0) toast('ส่งแจ้งเตือนค้างชำระ '+sent+' ราย แล้ว ✓');
 }
 
 // ═══════════════════════════════════════════════════
@@ -6543,7 +6726,7 @@ table{width:100%;border-collapse:collapse}td{padding:8px 20px;font-size:14px;bor
     <div style="font-size:13px;color:#666;margin-bottom:16px">${p.tenant} · ฿${fmt(p.total)}</div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <button class="btn btn-pr" onclick="printReceipt(this)" style="justify-content:center"><i class="ti ti-printer"></i> พิมพ์ / บันทึก PDF</button>
-      <button class="btn" onclick="sendLineReceipt(this)" style="background:#06C755;color:#fff;border:none;justify-content:center"><i class="ti ti-brand-line"></i> ส่งผ่าน LINE Notify</button>
+      <button class="btn" onclick="sendLineReceipt(this)" style="background:#06C755;color:#fff;border:none;justify-content:center"><i class="ti ti-brand-line"></i> ส่งผ่าน LINE</button>
       <button class="btn" onclick="sendEmailReceipt(this)" style="justify-content:center"><i class="ti ti-mail"></i> ส่งอีเมล (เปิด Mail app)</button>
       <button class="btn" onclick="this.closest('[style*=fixed]').remove()">ปิด</button>
     </div>
@@ -6565,19 +6748,21 @@ function printReceipt(btn){
   w.document.write(h); w.document.close();
 }
 function sendLineReceipt(btn){
-  const s=LS.get('settings')||{};
-  const token=s['line-token']||'';
-  if(!token){ btn.closest('[style*=fixed]').querySelector('#send-status').textContent='❌ ยังไม่ได้ตั้งค่า LINE Token'; return; }
   const p=JSON.parse(btn.dataset.pay); const rNo=btn.dataset.rno;
+  const room=(LS.get('rooms')||[]).find(r=>r.id===p.room);
+  const lineUserId=room?.lineUserId||'';
+  const statusEl=btn.closest('[style*=fixed]').querySelector('#send-status');
+  if(!lineUserId){ statusEl.textContent='❌ ห้องนี้ยังไม่ได้ตั้งค่า LINE User ID (ตั้งค่าได้ที่หน้าห้องพัก)'; return; }
+  const s=LS.get('settings')||{};
   const msg='\n✅ ใบเสร็จรับเงิน — '+(s.name||'')
     +'\nห้อง '+rNo+' คุณ'+p.tenant
     +'\nประจำเดือน '+p.month
     +'\n💰 ยอดชำระ ฿'+fmt(p.total)
     +'\n📅 วันที่ชำระ '+( p.date||today())
     +'\n\nขอบคุณที่ชำระค่าเช่าครับ/ค่ะ';
-  btn.closest('[style*=fixed]').querySelector('#send-status').textContent='กำลังส่ง...';
-  sendLine(token,msg).then(r=>{
-    btn.closest('[style*=fixed]').querySelector('#send-status').textContent=r.ok?'✓ ส่ง LINE สำเร็จ':'❌ '+( r.error||'ส่งไม่สำเร็จ');
+  statusEl.textContent='กำลังส่ง...';
+  sendLineMessaging(lineUserId,msg).then(r=>{
+    statusEl.textContent=r.ok?'✓ ส่ง LINE สำเร็จ':'❌ '+( r.error||'ส่งไม่สำเร็จ');
   });
 }
 function sendEmailReceipt(btn){
@@ -6852,13 +7037,15 @@ async function checkTenantSlips(){
         const dateStr=d.toLocaleDateString('th-TH')+' '+d.toLocaleTimeString('th-TH').slice(0,5);
         const imgHtml=slip.slipUrl
           ?'<img src="'+slip.slipUrl+'" style="max-width:100%;max-height:160px;border-radius:6px;margin-top:8px;display:block;cursor:zoom-in" onclick="viewFullImg(this.src)">'
+          :slip.slipData?'<img src="'+slip.slipData+'" style="max-width:100%;max-height:160px;border-radius:6px;margin-top:8px;display:block;cursor:zoom-in" onclick="viewFullImg(this.src)">'
           :slip.slipBase64?'<img src="data:'+slip.slipType+';base64,'+slip.slipBase64+'" style="max-width:100%;max-height:140px;border-radius:6px;margin-top:8px;display:block">':'';
         return '<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center">'
           +'<div><div style="font-weight:600;font-size:14px">ห้อง '+(slip.roomNo||slip.roomId||'?')+'</div>'
           +'<div style="font-size:12px;color:var(--text2)">'+dateStr+(slip.amount?' · ฿'+slip.amount:'')+'</div></div>'
           +'<div style="display:flex;gap:6px">'
           +'<span class="pill '+(slip.status==='ยืนยันแล้ว'?'p-gr':'p-am')+'" style="font-size:11px">'+slip.status+'</span>'
-          +(slip.status!=='ยืนยันแล้ว'?'<button class="btn btn-sm btn-gr" style="font-size:11px;padding:3px 8px" onclick="confirmSlip(\''+slip.roomId+'\',\''+slip.key+'\',this)">✓ ยืนยัน</button>':'')
+          +(slip.status!=='ยืนยันแล้ว'?'<button class="btn btn-sm btn-gr" style="font-size:11px;padding:3px 8px" onclick="confirmSlip(\''+slip.roomId+'\',\''+slip.key+'\',this,\''+(slip.roomNo||'')+'\')">✓ ยืนยัน</button>':'')
+          +'<button class="btn btn-sm" style="font-size:11px;padding:3px 8px;color:var(--red-600)" onclick="deleteSlip(\''+slip.roomId+'\',\''+slip.key+'\',this)"><i class="ti ti-trash"></i></button>'
           +'</div></div>'+imgHtml+'</div>';
       }).join('');
     }catch(e){
@@ -6867,17 +7054,73 @@ async function checkTenantSlips(){
     }
   });
 }
-async function confirmSlip(roomId,key,btn){
+// ── Auto-poll สลิปแบบเงียบ ──
+// ใช้สำหรับ background polling: ไม่เปิด login modal เอง ถ้ายังไม่ login จะข้ามไปเงียบๆ
+// (รอให้ผู้ใช้ login เองตอนเปิดหน้าพอร์ทัลผู้เช่าครั้งแรก จากนั้น token จะอยู่ในหน่วยความจำและ poll ได้ต่อเนื่อง)
+async function _slipFetchCountSilent(){
+  if(!fbBase() || !_fbIdToken) return {ok:false, count:0};
+  try{
+    const r = await fbFetch(fbTenantSlipUrl(null));
+    if(!r || !r.ok) return {ok:false, count:0};
+    const data = await r.json();
+    if(!data || typeof data!=='object') return {ok:true, count:0};
+    let count = 0;
+    Object.values(data).forEach(roomSlips=>{
+      if(typeof roomSlips==='object' && roomSlips) count += Object.keys(roomSlips).length;
+    });
+    return {ok:true, count};
+  }catch(e){
+    return {ok:false, count:0};
+  }
+}
+
+async function confirmSlip(roomId,key,btn,roomNoText){
   requireAuth(async(token)=>{
     try{
       const url=fbBase()+'/tenant_slips/'+roomId+'/'+key+'/status.json';
-      await fbFetch(url,{method:'PUT',body:'"ยืนยันแล้ว"',headers:{'Content-Type':'application/json'}});
-      btn.textContent='✓ ยืนยันแล้ว'; btn.disabled=true;
-      toast('ยืนยันสลิปแล้ว ✓');
-    }catch(e){ if(e.message!=='auth_expired') toast('ยืนยันไม่สำเร็จ','error'); }
+      const r=await fbFetch(url,{method:'PUT',body:'"ยืนยันแล้ว"',headers:{'Content-Type':'application/json'}});
+      if(!r||!r.ok){ toast('ยืนยันไม่สำเร็จ (เซิร์ฟเวอร์ตอบกลับผิดพลาด)','error'); return; }
+
+      // ── ลิงก์กับตาราง "ค่าเช่าและการชำระเงิน" ──
+      // หารายการที่ตรงกับห้องนี้ + เดือนปัจจุบัน (สลิปไม่มีข้อมูลเดือนติดมา จึงอิงเดือนปัจจุบันเป็นหลัก)
+      // ถ้ามีหลายรายการค้างของห้องเดียวกัน จะเลือกรายการที่ยังไม่ชำระและใหม่ที่สุด
+      const pays = LS.get('payments')||[];
+      const month = currentMonth();
+      const candidates = pays.filter(p=>{
+        const pRoomNo = String(roomNo(p.room));
+        return pRoomNo===String(roomNoText) && p.month===month && p.status!=='ชำระแล้ว';
+      });
+      if(candidates.length>0){
+        const p = candidates[0];
+        p.status='ชำระแล้ว';
+        p.date=today();
+        LS.set('payments',pays);
+        try{ renderPayments(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+        try{ renderRentRegister(); }catch(e){}
+        updateBadges();
+        toast('ยืนยันสลิปแล้ว และอัปเดตสถานะชำระเงินห้อง '+roomNoText+' ✓');
+      } else {
+        toast('ยืนยันสลิปแล้ว (ไม่พบรายการค่าเช่าเดือน '+month+' ของห้อง '+roomNoText+' ให้อัปเดตอัตโนมัติ — กรุณาเช็คในตาราง "ค่าเช่าและการชำระเงิน" ด้วยตนเอง)','error');
+      }
+      // โหลดรายการสลิปใหม่ทั้งหมดจาก Firebase เพื่อให้ badge สถานะตรงกับข้อมูลจริงเสมอ
+      // (ไม่พึ่งการแก้ DOM บางส่วน ซึ่งทำให้ badge เก่าค้างอยู่ได้ถ้า render ไม่ตรงกับ status จริง)
+      checkTenantSlips();
+    }catch(e){ if(e.message!=='auth_expired') toast('ยืนยันไม่สำเร็จ: '+e.message,'error'); }
   });
 }
-function viewSlip(img){ const w=window.open('','_blank'); w.document.write('<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+img.src+'" style="max-width:100%;max-height:100vh"></body></html>'); w.document.close(); }
+async function deleteSlip(roomId,key,btn){
+  if(!confirm('ลบสลิปนี้?')) return;
+  requireAuth(async(token)=>{
+    try{
+      const url=fbBase()+'/tenant_slips/'+roomId+'/'+key+'.json';
+      await fbFetch(url,{method:'DELETE'});
+      toast('ลบสลิปแล้ว ✓');
+      checkTenantSlips();
+    }catch(e){ if(e.message!=='auth_expired') toast('ลบไม่สำเร็จ','error'); }
+  });
+}
+function viewSlip(img){ viewFullImg(img.src); }
 
 // ═══════════════════════════════════════════════════
 // METER ANOMALY DETECTION
@@ -6971,8 +7214,8 @@ function buildBillData(month){
     const other=p?p.other:0;
     const total=rent+(elec||0)+(water||0)+(other||0);
     const status=p?p.status:'ยังไม่มีบิล';
-    const lineToken=c?.linetoken||'';
-    return {roomId:r.id,roomNo:r.no,tenant,rent,elec,water,other,total,status,lineToken,month,s};
+    const lineUserId=r.lineUserId||'';
+    return {roomId:r.id,roomNo:r.no,tenant,rent,elec,water,other,total,status,lineUserId,month,s};
   });
 }
 
@@ -6982,19 +7225,19 @@ function renderBulkTable(){
   const el=document.getElementById('bulk-result-table');
   if(!el||!bills.length) return;
   const paid=bills.filter(b=>b.status==='ชำระแล้ว').length;
-  const hasToken=bills.filter(b=>b.lineToken).length;
+  const hasToken=bills.filter(b=>b.lineUserId).length;
   el.innerHTML=`<div class="card"><div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
-    <span style="font-size:13px;color:var(--text2)">ทั้งหมด <b>${bills.length}</b> ห้อง · ชำระแล้ว <b style="color:var(--green-600)">${paid}</b> · ยังไม่ชำระ <b style="color:var(--red-600)">${bills.length-paid}</b> · มี LINE Token <b style="color:var(--blue-600)">${hasToken}</b> ห้อง</span>
+    <span style="font-size:13px;color:var(--text2)">ทั้งหมด <b>${bills.length}</b> ห้อง · ชำระแล้ว <b style="color:var(--green-600)">${paid}</b> · ยังไม่ชำระ <b style="color:var(--red-600)">${bills.length-paid}</b> · มี LINE User ID <b style="color:var(--blue-600)">${hasToken}</b> ห้อง</span>
   </div>
   <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>ห้อง</th><th>ผู้เช่า</th><th>ค่าเช่า</th><th>ค่าไฟ</th><th>ค่าน้ำ</th><th>รวม</th><th>สถานะ</th><th>LINE Token</th></tr></thead>
+    <thead><tr><th>ห้อง</th><th>ผู้เช่า</th><th>ค่าเช่า</th><th>ค่าไฟ</th><th>ค่าน้ำ</th><th>รวม</th><th>สถานะ</th><th>LINE</th></tr></thead>
     <tbody>${bills.map(b=>`<tr>
       <td style="font-family:var(--mono);font-weight:500">${b.roomNo}</td>
       <td>${b.tenant}</td><td>฿${fmt(b.rent)}</td><td>฿${fmt(b.elec)}</td><td>฿${fmt(b.water)}</td>
       <td style="font-weight:500">฿${fmt(b.total)}</td>
       <td><span class="pill ${pillClass(b.status)}" style="font-size:10px">${b.status}</span></td>
-      <td style="font-size:11px;color:${b.lineToken?'var(--green-600)':'var(--red-400)'}">
-        ${b.lineToken?'✓ มี Token':'— ไม่มี Token'}
+      <td style="font-size:11px;color:${b.lineUserId?'var(--green-600)':'var(--red-400)'}">
+        ${b.lineUserId?'✓ มี LINE':'— ไม่มี LINE'}
       </td></tr>`).join('')}
     </tbody>
   </table></div></div>`;
@@ -7013,9 +7256,7 @@ async function startBulkBill(){
   if(!MONTHS_TH.some(m=>month.startsWith(m))){ toast('รูปแบบเดือนไม่ถูกต้อง','error'); return; }
 
   const sendTenantLine=document.getElementById('send-line-bulk')?.checked;
-  const sendAdminLine=document.getElementById('send-admin-line')?.checked;
   const s=LS.get('settings')||{};
-  const adminToken=s['line-token']||'';
 
   const bills=buildBillData(month);
   const eligible=bills.filter(b=>b.total>0);
@@ -7052,32 +7293,21 @@ async function startBulkBill(){
       +(s.promptpay?'\nPromptPay: '+s.promptpay:'')
       +(s.bank?'\nบัญชี: '+s.bank+' ('+s.bankname+')':'');
 
-    // Send to tenant LINE token
-    if(sendTenantLine && bill.lineToken){
+    // Send to tenant LINE
+    if(sendTenantLine && bill.lineUserId){
       try{
-        const res=await sendLine(bill.lineToken, msgText);
+        const res=await sendLineMessaging(bill.lineUserId, msgText);
         if(res.ok){ sentLine++; log('✓ ห้อง '+bill.roomNo+' — ส่ง LINE สำเร็จ','var(--green-600)'); }
         else { errors++; log('✗ ห้อง '+bill.roomNo+' — LINE Error: '+(res.error||res.status),'var(--red-600)'); }
       }catch(e){ errors++; log('✗ ห้อง '+bill.roomNo+' — '+e.message,'var(--red-600)'); }
       await new Promise(r=>setTimeout(r,600)); // rate limit
-    } else if(sendTenantLine && !bill.lineToken){
-      log('⚠ ห้อง '+bill.roomNo+' — ไม่มี LINE Token ของผู้เช่า','var(--amber-600)');
+    } else if(sendTenantLine && !bill.lineUserId){
+      log('⚠ ห้อง '+bill.roomNo+' — ไม่มี LINE User ID ของผู้เช่า','var(--amber-600)');
     }
   }
 
-  // Send admin summary
-  if(sendAdminLine && adminToken){
-    const totalAmt=eligible.reduce((a,b)=>a+b.total,0);
-    const withToken=eligible.filter(b=>b.lineToken).length;
-    const summary='\n📊 สรุปการส่งบิล '+month
-      +'\nส่งแล้ว '+eligible.length+' ห้อง'
-      +'\n💰 ยอดรวม ฿'+fmt(totalAmt)
-      +'\n✅ ส่ง LINE สำเร็จ '+sentLine+' ห้อง'
-      +'\n⚠ ไม่มี Token '+(eligible.length-withToken)+' ห้อง'
-      +(errors?'\n❌ Error '+errors+' ห้อง':'');
-    await sendLine(adminToken, summary);
-    log('📊 ส่งสรุปถึง Admin แล้ว','var(--blue-600)');
-  }
+  // หมายเหตุ: ระบบ LINE Messaging API ส่งหาผู้รับเฉพาะคนเท่านั้น (ไม่มี concept "admin token" broadcast แบบ LINE Notify เดิม)
+  // สรุปผลการส่งจะแสดงใน log ด้านล่างแทน
 
   progLabel.textContent=`✓ เสร็จสิ้น! ส่ง LINE สำเร็จ ${sentLine}/${eligible.length} ห้อง`;
   progBar.style.background='var(--green-500)';
@@ -7438,14 +7668,12 @@ function swfPrintBill(){
 
 function swfGoSendLine(){
   const rId=_swfPayData?.rId||'';
-  const cons=LS.get('contracts')||[];
-  const c=cons.filter(x=>x.room===rId&&x.status!=='หมดแล้ว').slice(-1)[0];
-  const hasToken=c?.linetoken;
-  const s=LS.get('settings')||{};
+  const room=(LS.get('rooms')||[]).find(r=>r.id===rId);
+  const hasLineId=room?.lineUserId;
   document.getElementById('swf-line-info').innerHTML=`
     <div><b>ผู้เช่า:</b> ${_swfPayData.tenant} (ห้อง ${roomNo(rId)})</div>
     <div><b>ยอด:</b> ฿${fmt(_swfPayData.total)} เดือน ${currentMonth()}</div>
-    <div style="margin-top:6px"><b>LINE Token ผู้เช่า:</b> ${hasToken?'<span style="color:var(--green-600)">✓ มี Token พร้อมส่ง</span>':'<span style="color:var(--amber-600)">ไม่มี Token — จะส่งไปที่ Admin แทน</span>'}</div>`;
+    <div style="margin-top:6px"><b>LINE User ID ห้องนี้:</b> ${hasLineId?'<span style="color:var(--green-600)">✓ มี พร้อมส่ง</span>':'<span style="color:var(--amber-600)">ยังไม่ได้ตั้งค่า — ตั้งได้ที่หน้าห้องพัก</span>'}</div>`;
   document.getElementById('swf-line-status').textContent='';
   document.getElementById('swf-send-line-btn').disabled=false;
   swfShowStep(4);
@@ -7454,10 +7682,9 @@ function swfGoSendLine(){
 async function swfSendLine(){
   const rId=_swfPayData?.rId||'';
   const s=LS.get('settings')||{};
-  const cons=LS.get('contracts')||[];
-  const c=cons.filter(x=>x.room===rId&&x.status!=='หมดแล้ว').slice(-1)[0];
-  const token=c?.linetoken||s['line-token']||'';
-  if(!token){ document.getElementById('swf-line-status').innerHTML='<span style="color:var(--red-600)">ไม่มี LINE Token — ตั้งค่าในสัญญาหรือ Settings ก่อน</span>'; return; }
+  const room=(LS.get('rooms')||[]).find(r=>r.id===rId);
+  const lineUserId=room?.lineUserId||'';
+  if(!lineUserId){ document.getElementById('swf-line-status').innerHTML='<span style="color:var(--red-600)">ไม่มี LINE User ID — ตั้งค่าที่หน้าห้องพักก่อน</span>'; return; }
 
   const msg='\n📋 ใบแจ้งหนี้ค่าเช่า\nห้อง '+roomNo(rId)+' คุณ'+_swfPayData.tenant
     +'\nประจำเดือน '+currentMonth()
@@ -7472,10 +7699,10 @@ async function swfSendLine(){
 
   document.getElementById('swf-send-line-btn').disabled=true;
   document.getElementById('swf-line-status').textContent='กำลังส่ง...';
-  const res=await sendLine(token,msg);
+  const res=await sendLineMessaging(lineUserId,msg);
   document.getElementById('swf-line-status').innerHTML=res.ok
     ?'<span style="color:var(--green-600)">✅ ส่ง LINE สำเร็จ! ผู้เช่าได้รับแล้ว</span>'
-    :'<span style="color:var(--red-600)">❌ ส่งไม่สำเร็จ: '+(res.error||'')+' ลองใช้ Admin Token แทน</span>';
+    :'<span style="color:var(--red-600)">❌ ส่งไม่สำเร็จ: '+(res.error||'')+'</span>';
   if(res.ok) toast('ส่ง LINE ให้ '+_swfPayData.tenant+' สำเร็จ ✓');
 }
 
@@ -8094,8 +8321,9 @@ function renewContract(conId, newRent){
 async function sendRenewalNotice(conId){
   const cons=LS.get('contracts')||[];
   const c=cons.find(x=>x.id===conId); if(!c) return;
-  const s=LS.get('settings')||{}; const token=c.linetoken||s['line-token']||'';
-  if(!token){toast('ไม่มี LINE Token','error');return;}
+  const room=(LS.get('rooms')||[]).find(r=>r.id===c.room);
+  const lineUserId=room?.lineUserId||'';
+  if(!lineUserId){toast('ห้องนี้ยังไม่ได้ตั้งค่า LINE User ID','error');return;}
   const rs=LS.get('renewal_settings')||{pct:0};
   const diff=Math.round((new Date(c.end)-new Date())/86400000);
   const newRent=rs.pct?Math.round(+c.rent*(1+rs.pct/100)):+c.rent;
@@ -8104,13 +8332,13 @@ async function sendRenewalNotice(conId){
     +'\n💰 ค่าเช่าปัจจุบัน ฿'+fmt(c.rent)
     +(rs.pct?'\n📈 ค่าเช่าใหม่เมื่อต่อสัญญา ฿'+fmt(newRent)+' (+'+rs.pct+'%)':'')
     +'\n\nกรุณาติดต่อเจ้าของห้องเพื่อต่อสัญญา\nขอบคุณที่พักอาศัยกับเรานะครับ/ค่ะ';
-  const res=await sendLine(token,msg);
-  toast(res.ok?'ส่ง LINE แจ้งต่อสัญญาแล้ว ✓':'ส่ง LINE ไม่สำเร็จ','error');
+  const res=await sendLineMessaging(lineUserId,msg);
+  toast(res.ok?'ส่ง LINE แจ้งต่อสัญญาแล้ว ✓':'ส่ง LINE ไม่สำเร็จ: '+(res.error||''),res.ok?undefined:'error');
 }
 async function sendRenewalNotices(){
   const cons=LS.get('contracts')||[];
   const rs=LS.get('renewal_settings')||{pct:0,days:60};
-  const s=LS.get('settings')||{};
+  const rooms=LS.get('rooms')||[];
   const expiring=cons.filter(c=>{
     if(c.status==='หมดแล้ว') return false;
     const diff=Math.round((new Date(c.end)-new Date())/86400000);
@@ -8119,17 +8347,13 @@ async function sendRenewalNotices(){
   if(!expiring.length){toast('ไม่มีสัญญาใกล้หมด');return;}
   let sent=0;
   for(const c of expiring){
-    const token=c.linetoken||'';
-    if(!token) continue;
+    const room=rooms.find(r=>r.id===c.room);
+    if(!room?.lineUserId) continue;
     await sendRenewalNotice(c.id);
     sent++;
     await new Promise(r=>setTimeout(r,600));
   }
-  // Admin summary
-  if(s['line-token']){
-    await sendLine(s['line-token'],'\n📊 สรุปแจ้งต่อสัญญา\nส่งแล้ว '+sent+'/'+expiring.length+' ห้อง\n('+( expiring.length-sent)+' ห้องไม่มี LINE Token)');
-  }
-  toast('ส่งแจ้งเตือนต่อสัญญา '+sent+' ห้องแล้ว ✓');
+  toast('ส่งแจ้งเตือนต่อสัญญา '+sent+'/'+expiring.length+' ห้องแล้ว ✓'+(expiring.length>sent?' ('+(expiring.length-sent)+' ห้องไม่มี LINE User ID)':''));
 }
 function renderRentIncreaseHistory(){
   const hist=(LS.get('rent_adjusts')||[]).slice().reverse();
@@ -8146,7 +8370,14 @@ function renderRentIncreaseHistory(){
   </div>`).join('');
 }
 
-function viewFullImg(src){ window.open(src,'_blank'); }
+function viewFullImg(src){
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px';
+  overlay.innerHTML='<img src="'+src+'" style="max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 4px 30px rgba(0,0,0,.5)">'
+    +'<button style="position:fixed;top:16px;right:20px;background:rgba(255,255,255,.15);color:#fff;border:none;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer">✕</button>';
+  overlay.onclick=()=>overlay.remove();
+  document.body.appendChild(overlay);
+}
 
 // ═══ WALK MODE ═══
 let _walkType='elec', _walkMonth='', _walkData={};
@@ -8352,6 +8583,8 @@ function renderRentRegister(){
   }
 
   let totalAmt=0, totalRooms=0, newIn=0, moveOut=0, vacantCount=0;
+  // เลขที่ใบแจ้งหนี้ใช้ฟังก์ชันกลาง getOrCreateInvoiceNo() (ใช้ร่วมกับฟอร์มใบแจ้งหนี้ ป้องกันเลขซ้ำ/ขัดแย้งกัน)
+
   const rows=rooms.map(r=>{
     // รวบรวม payment ทั้งหมดของห้องนี้ในเดือนที่เลือก (match id หรือเลขห้อง)
     const candThisMonth=pays.filter(x=>(x.room===r.id||String(x.room)===String(r.no))&&x.month===month);
@@ -8405,6 +8638,7 @@ function renderRentRegister(){
 
     const isOut=note==='ออก'; // future: mark moved out
     if(isVacant) return `<tr style="opacity:0.4;background:#fafafa">
+      <td style="border:1px solid #ddd;padding:5px 7px"></td>
       <td style="font-size:11px;color:#999;border:1px solid #ddd;padding:5px 7px">${toThaiDate(dueDate)}</td>
       <td style="font-size:11px;color:#aaa;border:1px solid #ddd;padding:5px 7px">ว่าง</td>
       <td style="border:1px solid #ddd;padding:5px 7px"></td>
@@ -8416,7 +8650,9 @@ function renderRentRegister(){
       <td style="border:1px solid #ddd;padding:5px 7px"></td>
     </tr>`;
 
+    const invoiceNo=getOrCreateInvoiceNo(r.id, month);
     return `<tr style="${isNew?'background:#FFFDE7':''}">
+      <td style="font-size:11px;font-weight:600;color:#185FA5;white-space:nowrap;border:1px solid #ddd;padding:5px 7px">${invoiceNo}</td>
       <td style="font-size:11px;white-space:nowrap;border:1px solid #ddd;padding:5px 7px">${toThaiDate(p?.date||dueDate)}</td>
       <td style="font-size:11px;color:${note==='ออก'?'#c00':'#555'};max-width:80px;border:1px solid #ddd;padding:5px 7px">${note}</td>
       <td style="text-align:center;font-weight:700;font-size:13px;${isNew?'color:#856404;':''};border:1px solid #ddd;padding:5px 7px">
@@ -8442,6 +8678,7 @@ function renderRentRegister(){
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead>
         <tr style="background:#185FA5;color:#fff">
+          <th style="padding:6px 8px;border:1px solid #378ADD;white-space:nowrap">เลขที่ใบแจ้งหนี้</th>
           <th style="padding:6px 8px;border:1px solid #378ADD;white-space:nowrap">วันกำหนด</th>
           <th style="padding:6px 8px;border:1px solid #378ADD">หมายเหตุ</th>
           <th style="padding:6px 8px;border:1px solid #378ADD;text-align:center">ระยะเวลา<br><span style="font-size:10px;font-weight:400">(เดือน)</span></th>
@@ -8456,7 +8693,7 @@ function renderRentRegister(){
       <tbody>
         ${rows.join('')}
         <tr style="background:#EAF3DE;font-weight:700;border-top:2px solid #185FA5">
-          <td colspan="2" style="padding:7px 8px;border:1px solid #ccc">รวม</td>
+          <td colspan="3" style="padding:7px 8px;border:1px solid #ccc">รวม</td>
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:center">${totalRooms}</td>
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:center">ห้อง</td>
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:right;font-size:12px">ยอดรวมค่าเช่า</td>
@@ -8884,6 +9121,23 @@ setInterval(async()=>{
     const mntPage = document.getElementById('page-maintenance');
     if(mntPage && mntPage.classList.contains('active')) renderMnt();
   }
+}, 30000);
+
+// ── Auto-poll: รับสลิปจากผู้เช่า (พอร์ทัลผู้เช่า) อัตโนมัติ ทุก 30 วินาที ──
+// ทำงานเงียบๆ พื้นหลัง ไม่เปิด login modal เอง (ข้ามไปถ้ายังไม่ login)
+// ถ้าจำนวนสลิปเพิ่มขึ้นจะ toast แจ้งเตือน และโหลดรายการใหม่เต็มรูปแบบถ้ากำลังเปิดหน้าพอร์ทัลผู้เช่าอยู่
+let _lastSlipCount = null;
+setInterval(async()=>{
+  const r = await _slipFetchCountSilent();
+  if(!r.ok) return;
+  if(_lastSlipCount===null){ _lastSlipCount = r.count; return; } // ครั้งแรก: แค่บันทึก baseline ไม่แจ้งเตือน
+  if(r.count > _lastSlipCount){
+    const added = r.count - _lastSlipCount;
+    toast('📥 มีสลิปใหม่เข้ามา '+added+' รายการ ✓');
+    const portalPage = document.getElementById('page-tenant-portal');
+    if(portalPage && portalPage.classList.contains('active')) checkTenantSlips();
+  }
+  _lastSlipCount = r.count;
 }, 30000);
 
 // Checklist type change
