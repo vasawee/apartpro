@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ห้องของคุณ — สมสุภาเพรส รัชดา</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:linear-gradient(135deg,#0C447C 0%,#185FA5 100%);min-height:100vh;padding:16px;color:#111}
+.card{background:#fff;border-radius:14px;max-width:420px;margin:0 auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.hdr{background:linear-gradient(135deg,#185FA5,#0C447C);color:#fff;padding:18px 20px}
+.hdr h2{font-size:18px;font-weight:700;margin-bottom:2px}
+.hdr small{opacity:.8;font-size:12px}
+.body{padding:18px}
+.room-pill{display:inline-block;background:#EAF3FF;color:#185FA5;font-size:22px;font-weight:700;padding:6px 20px;border-radius:30px;margin-bottom:14px;font-family:monospace}
+.bill-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:14px}
+.bill-row:last-child{border:none}
+.bill-total{display:flex;justify-content:space-between;padding:12px 0;font-size:17px;font-weight:700;border-top:2px solid #185FA5;margin-top:4px}
+.bill-total .amt{color:#185FA5}
+.due{background:#FFF8E6;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;font-size:13px;margin:12px 0;text-align:center}
+.section{font-size:13px;font-weight:600;color:#555;margin:16px 0 8px;display:flex;align-items:center;gap:6px}
+.upload-area{border:2px dashed #B0C4DE;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-area:hover{border-color:#185FA5;background:#F0F7FF}
+.upload-area img{max-width:100%;max-height:200px;border-radius:8px;margin-top:10px}
+input[type=file]{display:none}
+button{width:100%;padding:13px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:15px;font-family:inherit;font-weight:600;cursor:pointer;margin-top:10px}
+button:disabled{background:#9BB5D0}
+button.sec{background:#fff;color:#185FA5;border:2px solid #185FA5;margin-top:8px}
+.status{text-align:center;padding:12px;border-radius:8px;font-size:14px;margin-top:10px}
+.ok{background:#EAF3DE;color:#27500A}.err{background:#FCEBEB;color:#A32D2D}
+.loader{text-align:center;padding:30px;color:#fff;font-size:15px}
+.history{font-size:13px}
+.hist-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0}
+.bank-info{font-size:12.5px;color:#555;text-align:center;margin-top:6px}
+.pay-status-pill{display:inline-block;padding:3px 12px;border-radius:14px;font-size:12.5px;font-weight:600;margin-top:6px}
+</style></head><body>
+<div id="loading" class="loader">⏳ กำลังโหลดข้อมูล...</div>
+<div class="card" id="main-card" style="display:none">
+  <div class="hdr">
+    <h2 id="apt-name">สมสุภาเพรส รัชดา</h2>
+    <small id="apt-addr"></small>
+  </div>
+  <div class="body">
+    <div style="text-align:center">
+      <div id="room-no" class="room-pill">—</div>
+      <div id="tenant-name" style="font-size:15px;color:#555;margin-bottom:6px"></div>
+      <div id="pay-status" class="pay-status-pill"></div>
+    </div>
+    <div class="due" id="due-notice" style="display:none"></div>
+    <div class="section">📄 บิลเดือนนี้ <span id="bill-month" style="font-weight:400;color:#888"></span></div>
+    <div id="bill-section">
+      <div id="bill-items"></div>
+      <div class="bill-total"><span>รวมทั้งสิ้น</span><span class="amt" id="bill-total">฿0</span></div>
+      <div class="bank-info" id="bank-info"></div>
+    </div>
+    <div class="section">📎 แนบสลิปโอนเงิน</div>
+    <div class="upload-area" id="upload-area">
+      <div style="margin-bottom:10px">📎 เลือกรูปสลิปโอนเงิน</div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button type="button" onclick="document.getElementById('slip-input-camera').click()" style="flex:1;margin:0;padding:10px;font-size:13px">📷 ถ่ายรูป</button>
+        <button type="button" onclick="document.getElementById('slip-input-gallery').click()" style="flex:1;margin:0;padding:10px;font-size:13px;background:#fff;color:#185FA5;border:2px solid #185FA5">🖼️ เลือกจากคลัง/ไฟล์</button>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:8px">รองรับ JPG, PNG, PDF</div>
+      <img id="slip-preview" style="display:none">
+    </div>
+    <input type="file" id="slip-input-camera" accept="image/*" capture="environment" onchange="previewSlip(this)" style="display:none">
+    <input type="file" id="slip-input-gallery" accept="image/*,application/pdf" onchange="previewSlip(this)" style="display:none">
+    <div style="margin:8px 0"><input id="slip-amount" type="number" placeholder="จำนวนเงิน (ไม่บังคับ)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px"></div>
+    <button id="btn-submit" onclick="submitSlip()" disabled>📤 ส่งหลักฐานการโอน</button>
+    <div id="submit-status"></div>
+    <div class="section">📋 ประวัติการชำระ (3 เดือนล่าสุด)</div>
+    <div id="pay-history" class="history"></div>
+
+    <div class="section" style="margin-top:22px;border-top:1px solid #eee;padding-top:18px">🔧 สถานะแจ้งซ่อมล่าสุด</div>
+    <div id="mnt-status-list" class="history"></div>
+
+    <div class="section" style="margin-top:18px">📨 แจ้งซ่อมใหม่</div>
+    <select id="mnt-type" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+      <option value="แอร์">แอร์</option>
+      <option value="น้ำ/ประปา">น้ำ/ประปา</option>
+      <option value="ไฟฟ้า">ไฟฟ้า</option>
+      <option value="เฟอร์นิเจอร์">เฟอร์นิเจอร์</option>
+      <option value="อื่นๆ">อื่นๆ</option>
+    </select>
+    <textarea id="mnt-detail" placeholder="รายละเอียดปัญหา..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;min-height:70px;font-family:inherit;margin-bottom:8px"></textarea>
+    <select id="mnt-priority" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+      <option value="ปกติ">ความเร่งด่วน: ปกติ</option>
+      <option value="เร่งด่วน">ความเร่งด่วน: เร่งด่วน</option>
+    </select>
+    <input id="mnt-phone" type="tel" placeholder="เบอร์โทรติดต่อ" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:8px">
+    <button onclick="submitMaintenance()" id="btn-mnt-submit">📨 ส่งแจ้งซ่อม</button>
+    <div id="mnt-submit-status"></div>
+  </div>
+</div>
+<script>
+// ── อ่านค่าจาก URL query string แทนการ hardcode ──
+// ใช้งานแบบ: tenant-portal.html?db=<firebase_url>&room=<room_id>&no=<room_no>&name=<apt_name>&bucket=<storage_bucket>
+var params = new URLSearchParams(window.location.search);
+var DB = params.get('db') || '';
+var ROOM_ID = params.get('room') || '';
+var ROOM_NO = params.get('no') || '?';
+var STORAGE_BUCKET = params.get('bucket') || '';
+var WORKER_URL = (params.get('worker') || '').replace(/\/+$/,'');
+var slipBase64 = '', slipType = '', slipFile = null;
+
+function fmt(n){ return (n||0).toLocaleString('th-TH'); }
+
+async function loadBill(){
+  if(!DB || !ROOM_ID){
+    document.getElementById('loading').innerHTML = '<div style="color:#fff">❌ ลิงก์ไม่ถูกต้อง (ไม่พบข้อมูลห้อง)</div>';
+    return;
+  }
+  try{
+    const r = await fetch(DB+'/tenant_portal/'+ROOM_ID+'/bill.json');
+    const bill = await r.json() || {};
+
+    document.getElementById('apt-name').textContent = bill.apartName || 'อพาร์ตเมนต์';
+    document.getElementById('room-no').textContent = ROOM_NO;
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main-card').style.display = 'block';
+
+    if(!bill.rent){
+      document.getElementById('bill-section').innerHTML = '<div style="text-align:center;padding:20px;color:#888">ยังไม่มีบิลเดือนนี้</div>';
+      return;
+    }
+    document.getElementById('tenant-name').textContent = bill.tenant || 'ผู้เช่า';
+    document.getElementById('bill-month').textContent = bill.month || '';
+
+    var rows = '';
+    rows += '<div class="bill-row"><span>ค่าเช่า</span><span>฿'+fmt(bill.rent)+'</span></div>';
+    if(bill.elec) rows += '<div class="bill-row"><span>ค่าไฟ</span><span>฿'+fmt(bill.elec)+'</span></div>';
+    if(bill.water) rows += '<div class="bill-row"><span>ค่าน้ำ</span><span>฿'+fmt(bill.water)+'</span></div>';
+    document.getElementById('bill-items').innerHTML = rows;
+    document.getElementById('bill-total').textContent = '฿'+fmt(bill.total);
+
+    var statusEl = document.getElementById('pay-status');
+    statusEl.textContent = bill.status || 'รอชำระ';
+    statusEl.style.background = bill.status==='ชำระแล้ว' ? '#EAF3DE' : bill.status==='ค้างชำระ' ? '#FCEBEB' : '#FAEEDA';
+    statusEl.style.color = bill.status==='ชำระแล้ว' ? '#3B6D11' : bill.status==='ค้างชำระ' ? '#A32D2D' : '#854F0B';
+
+    if(bill.bank){
+      document.getElementById('bank-info').textContent = 'โอนได้ที่: '+bill.bank+(bill.bankname?' ธนาคาร'+bill.bankname:'')+(bill.bankAccName?' ชื่อบัญชี: '+bill.bankAccName:'')+(bill.promptpay?' | PromptPay: '+bill.promptpay:'');
+    }
+
+    // ── ประวัติการชำระ 3 เดือนล่าสุด ──
+    try{
+      const hr = await fetch(DB+'/tenant_portal/'+ROOM_ID+'/history.json');
+      const history = await hr.json() || [];
+      const histEl = document.getElementById('pay-history');
+      if(histEl){
+        histEl.innerHTML = history.length
+          ? history.map(function(h){
+              var col = h.status==='ชำระแล้ว' ? '#3B6D11' : '#854F0B';
+              return '<div class="hist-row"><span>'+h.month+'</span><span style="color:'+col+'">'+(h.status||'')+' · ฿'+fmt(h.total)+'</span></div>';
+            }).join('')
+          : '<div style="color:#999;font-size:12.5px">ยังไม่มีประวัติ</div>';
+      }
+    }catch(e){ /* ไม่กระทบการแสดงบิลหลัก ถ้าประวัติโหลดไม่ได้ */ }
+
+    // ── สถานะงานแจ้งซ่อมล่าสุดของห้องนี้ ──
+    try{
+      const mr = await fetch(DB+'/tenant_portal/'+ROOM_ID+'/maintenance.json');
+      const mnts = await mr.json() || [];
+      const mntStatusEl = document.getElementById('mnt-status-list');
+      if(mntStatusEl){
+        mntStatusEl.innerHTML = mnts.length
+          ? mnts.map(function(m){
+              var col = m.status==='เสร็จแล้ว' ? '#3B6D11' : m.status==='กำลังดำเนินการ' ? '#185FA5' : '#854F0B';
+              return '<div class="hist-row"><span>'+(m.type||'')+' · '+(m.date||'')+'</span><span style="color:'+col+'">'+(m.status||'')+'</span></div>';
+            }).join('')
+          : '<div style="color:#999;font-size:12.5px">ยังไม่มีรายการแจ้งซ่อม</div>';
+      }
+    }catch(e){ /* ไม่กระทบการแสดงบิลหลัก ถ้าสถานะซ่อมโหลดไม่ได้ */ }
+  }catch(e){
+    document.getElementById('loading').innerHTML = '<div style="color:#fff">❌ โหลดข้อมูลไม่ได้<br><small>'+e.message+'</small></div>';
+  }
+}
+
+function previewSlip(input){
+  var file = input.files[0]; if(!file) return;
+  slipType = file.type;
+  slipFile = file;
+  var prev = document.getElementById('slip-preview');
+
+  if(file.type === 'application/pdf'){
+    // PDF เก็บแบบ base64 ตรงๆ ไม่บีบอัด (ไม่ใช่รูปภาพ ใช้ canvas ไม่ได้)
+    var reader = new FileReader();
+    reader.onload = function(e){
+      slipBase64 = e.target.result; // เก็บเป็น data URL เต็ม (มี mime type ติดมาด้วย)
+      prev.style.display = 'none';
+      document.getElementById('btn-submit').disabled = false;
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+
+  // รูปภาพ: บีบอัดผ่าน canvas ก่อน (resize ไม่เกิน 640px, JPEG quality 0.5)
+  // เพื่อให้ไฟล์เล็กพอสำหรับเก็บใน Realtime Database (ไม่ใช้ Firebase Storage)
+  var img = new Image();
+  var reader2 = new FileReader();
+  reader2.onerror = function(){
+    document.getElementById('submit-status').innerHTML = '<div class="status err">❌ อ่านไฟล์รูปไม่สำเร็จ ลองเลือกรูปใหม่อีกครั้ง</div>';
+  };
+  reader2.onload = function(e){
+    img.onerror = function(){
+      document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ไม่สามารถประมวลผลรูปนี้ได้ ลองเลือกรูปอื่น</div>';
+    };
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var maxDim = 640;
+      var w = img.width, h = img.height;
+      if(w > h && w > maxDim){ h = h*(maxDim/w); w = maxDim; }
+      else if(h > maxDim){ w = w*(maxDim/h); h = maxDim; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var compressed = canvas.toDataURL('image/jpeg', 0.5);
+      slipBase64 = compressed;
+      prev.src = compressed; prev.style.display = 'block';
+      document.getElementById('btn-submit').disabled = false;
+      // แสดงขนาดไฟล์หลังบีบอัด เพื่อช่วย debug หากยังส่งไม่สำเร็จ
+      var sizeKB = Math.round(compressed.length * 0.75 / 1024);
+      console.log('Compressed slip size:', sizeKB, 'KB');
+    };
+    img.src = e.target.result;
+  };
+  reader2.readAsDataURL(file);
+}
+
+// แจ้งเจ้าของผ่าน LINE ว่ามีสลิปใหม่เข้ามา (fire-and-forget — ไม่บล็อกผู้เช่า ไม่ error ถ้าไม่ได้ตั้งค่า Worker URL)
+function notifyOwnerNewSlip(){
+  if(!WORKER_URL) return;
+  var tenantName = (document.getElementById('tenant-name')||{}).textContent || 'ผู้เช่า';
+  fetch(WORKER_URL+'/notify-slip', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ roomNo:ROOM_NO, tenant:tenantName })
+  }).catch(function(){ /* เงียบไว้ ไม่กระทบผู้เช่า */ });
+}
+
+async function submitSlip(){
+  if(!slipBase64){ return; }
+  var btn = document.getElementById('btn-submit');
+  var amtEl = document.getElementById('slip-amount');
+  var amount = amtEl ? amtEl.value.trim() : '';
+  btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  document.getElementById('submit-status').innerHTML = '';
+
+  var data = {roomId:ROOM_ID, roomNo:ROOM_NO, ts:Date.now(), slipData:slipBase64||null, amount:amount||null, status:'รอตรวจสอบ'};
+  var key = 'slip_'+Date.now();
+  var payload = JSON.stringify(data);
+
+  // ลองส่งสูงสุด 2 ครั้ง เผื่อ network สะดุดชั่วคราว (พบบ่อยบน mobile Safari ขณะอัปโหลดไฟล์ใหญ่)
+  var lastError = null;
+  for(var attempt=1; attempt<=2; attempt++){
+    try{
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function(){ controller.abort(); }, 20000);
+      var res = await fetch(DB+'/tenant_slips/'+ROOM_ID+'/'+key+'.json', {
+        method:'PUT', body:payload, headers:{'Content-Type':'application/json'},
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if(!res.ok){ throw new Error('เซิร์ฟเวอร์ตอบกลับ HTTP '+res.status); }
+      document.getElementById('submit-status').innerHTML = '<div class="status ok">✅ ส่งสลิปสำเร็จแล้ว! ทีมงานจะตรวจสอบและยืนยันภายใน 24 ชม.</div>';
+      btn.textContent = '✓ ส่งแล้ว';
+      notifyOwnerNewSlip(); // แจ้งเจ้าของผ่าน LINE (ไม่ต้องรอผลลัพธ์ ไม่กระทบผู้เช่าแม้ส่งไม่สำเร็จ)
+      return;
+    }catch(e){
+      lastError = e;
+      if(attempt < 2){ await new Promise(function(r){ setTimeout(r, 1500); }); }
+    }
+  }
+  // ส่งไม่สำเร็จทั้ง 2 ครั้ง
+  var sizeKB = Math.round(payload.length * 0.75 / 1024);
+  document.getElementById('submit-status').innerHTML = '<div class="status err">❌ ส่งไม่สำเร็จ: '+(lastError?lastError.message:'ไม่ทราบสาเหตุ')+'<br><small>ขนาดข้อมูล ~'+sizeKB+'KB — ลองเช็คสัญญาณอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง</small></div>';
+  btn.disabled = false; btn.textContent = '📤 ส่งหลักฐานการโอน';
+}
+
+async function submitMaintenance(){
+  var typeEl=document.getElementById('mnt-type');
+  var detailEl=document.getElementById('mnt-detail');
+  var priorityEl=document.getElementById('mnt-priority');
+  var phoneEl=document.getElementById('mnt-phone');
+  var statusEl=document.getElementById('mnt-submit-status');
+  var btn=document.getElementById('btn-mnt-submit');
+
+  if(!detailEl.value.trim()){
+    statusEl.innerHTML='<div class="status err">กรุณากรอกรายละเอียดปัญหา</div>';
+    return;
+  }
+  if(!DB || !ROOM_ID){
+    statusEl.innerHTML='<div class="status err">ลิงก์ไม่ถูกต้อง (ไม่พบข้อมูลห้อง)</div>';
+    return;
+  }
+  btn.disabled=true; btn.textContent='กำลังส่ง...';
+  try{
+    var data={
+      room: ROOM_NO,
+      type: typeEl.value,
+      detail: detailEl.value.trim(),
+      priority: priorityEl.value,
+      phone: phoneEl.value.trim(),
+      date: new Date().toISOString().slice(0,10),
+      status: 'รอดำเนินการ',
+      source: 'qr',
+      ts: Date.now()
+    };
+    await fetch(DB+'/ap_submissions/maintenance.json',{method:'POST',body:JSON.stringify(data),headers:{'Content-Type':'application/json'}});
+    statusEl.innerHTML='<div class="status ok">✅ ส่งแจ้งซ่อมสำเร็จแล้ว! ทีมงานจะดำเนินการโดยเร็ว</div>';
+    btn.textContent='✓ ส่งแล้ว';
+    detailEl.value=''; phoneEl.value='';
+    setTimeout(function(){ btn.disabled=false; btn.textContent='📨 ส่งแจ้งซ่อม'; }, 3000);
+  }catch(e){
+    statusEl.innerHTML='<div class="status err">❌ ส่งไม่สำเร็จ: '+e.message+'</div>';
+    btn.disabled=false; btn.textContent='📨 ส่งแจ้งซ่อม';
+  }
+}
+
+loadBill();
+</script></body></html>
