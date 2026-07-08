@@ -6474,16 +6474,6 @@ function bulkTaxInvoicePrint(){
     const rooms=(LS.get('rooms')||[]).filter(r=>r.status==='มีผู้เช่า');
     if(!rooms.length){ toast('ไม่มีห้องที่มีผู้เช่า','error'); return; }
 
-    // ── เปิดหน้าต่างทันทีตั้งแต่ต้น (ก่อนมี prompt คั่นกลาง) ──
-    // ป้องกัน popup blocker เงียบๆ บล็อกหน้าต่างทิ้ง เพราะเบราว์เซอร์บางตัวจะไม่นับ window.open
-    // ที่เรียกหลัง prompt()/confirm() ว่าเป็นการกระทำโดยตรงจากการคลิกของผู้ใช้
-    const w=window.open('','_blank');
-    if(!w || w.closed){
-      toast('❌ เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณาอนุญาต popup สำหรับเว็บนี้แล้วลองใหม่ (เช็คไอคอนบล็อก popup ที่แถบ URL ด้านบน)','error');
-      return;
-    }
-    w.document.write('<p style="font-family:sans-serif;padding:20px;color:#666">กำลังสร้างใบกำกับภาษี กรุณารอสักครู่...</p>');
-
     const pays=LS.get('payments')||[];
     const utils=LS.get('utilities')||[];
     const s=LS.get('settings')||{name:'ApartPro',addr:'',tel:'',bank:'',bankname:'',promptpay:''};
@@ -6491,20 +6481,16 @@ function bulkTaxInvoicePrint(){
     const dateVal=today();
 
     // ค่าส่วนกลาง: ปกติเป็นค่าคงที่เท่ากันทุกห้อง ถามครั้งเดียวแล้วใช้กับทุกห้อง (ไม่ต้องกรอกทีละห้อง)
-    // ค่าเริ่มต้นดึงจากช่อง "ค่าส่วนกลาง" ในฟอร์มปัจจุบัน ถ้ามีกรอกไว้แล้ว
     const defaultCommon = +document.getElementById('inv-common')?.value || 0;
     const commonInput = prompt('ค่าส่วนกลางต่อห้อง (บาท) — ใช้ค่าเดียวกันทุกห้อง\nถ้าห้องไหนไม่มีค่าส่วนกลาง ใส่ 0', defaultCommon);
-    if(commonInput===null){ w.close(); return; } // ผู้ใช้กดยกเลิก — ปิดหน้าต่างที่เปิดรอไว้ด้วย
+    if(commonInput===null) return; // ผู้ใช้กดยกเลิก
     const commonPerRoom = +commonInput || 0;
 
-  // สร้าง HTML ใบกำกับภาษีทีละห้อง โดยใช้ renderTaxInvoice โหมด "คืนค่าเป็น string" (ไม่กระทบตัวอย่างที่กำลังแสดงอยู่)
-  const invoicesHtml=[];
-  let sharedCSS='';
-  try{
+    // สร้าง HTML ใบกำกับภาษีทีละห้อง โดยใช้ renderTaxInvoice โหมด "คืนค่าเป็น string" (ไม่กระทบตัวอย่างที่กำลังแสดงอยู่)
+    const invoicesHtml=[];
+    let sharedCSS='';
+
     // ── เรียงลำดับห้องตามเวลายืนยันรับเงินจริง (confirmTs) ก่อนออกเลขที่ใบกำกับภาษี ──
-    // ห้องที่มี confirmTs (ยืนยันหลังอัปเดตระบบนี้) มาก่อน เรียงจากเวลาที่ยืนยันก่อน-หลัง
-    // ห้องที่มีแค่ p.date (ข้อมูลเก่าก่อนมี confirmTs) เรียงตามวันที่ต่อจากนั้น
-    // ห้องที่ยังไม่ได้ชำระ (ไม่มี payment) ไปท้ายสุด — ยังไม่ควรมีเลขที่ใบกำกับภาษีจริง
     const entries = rooms.map(r=>{
       const p=pays.filter(x=>x.room===r.id&&x.month===month).slice(-1)[0];
       return {r, p};
@@ -6526,34 +6512,24 @@ function bulkTaxInvoicePrint(){
       const elec=p?p.elec:(u?u.ecost:0);
       const common=commonPerRoom, other=p?p.other:0;
       const total=rent+(water||0)+(elec||0)+common+other;
-      // เลขที่ใบกำกับภาษี: คนละชุดกับ B11422 — รันตามลำดับที่ประมวลผล (ซึ่งเรียงตาม confirmTs แล้วด้านบน)
-      const taxInvoiceKey = p?.id || ('room_'+r.id+'_'+month); // ห้องที่ยังไม่จ่าย ใช้ key สำรอง
+      const taxInvoiceKey = p?.id || ('room_'+r.id+'_'+month);
       const docNo=getOrCreateTaxInvoiceNo(taxInvoiceKey);
-      // เลขที่ใบรับประกัน: คนละเล่มกับเลขที่ใบกำกับภาษี รันตามลำดับเดียวกัน (ตาม confirmTs)
       const guaranteeNo=getOrCreateGuaranteeNo(taxInvoiceKey);
       const html=renderTaxInvoice(tenant,r.no,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo,true);
-      // แยก CSS ออกมาเก็บไว้ครั้งเดียว (ทุกห้องใช้ CSS เดียวกัน) ป้องกันซ้ำซ้อน
       const styleMatch=html.match(/<style>([\s\S]*?)<\/style>/i);
       if(styleMatch && !sharedCSS) sharedCSS=styleMatch[1];
       invoicesHtml.push(html.replace(/<style>[\s\S]*?<\/style>/i,''));
     });
-  }catch(err){
-    w.close();
-    toast('❌ สร้างใบกำกับภาษีไม่สำเร็จ: '+err.message,'error');
-    console.error('bulkTaxInvoicePrint error:', err);
-    return;
-  }
 
-  // รวม 2 ห้องต่อหน้า พร้อมเส้นตัด
-  const pages=[];
-  for(let i=0;i<invoicesHtml.length;i+=2) pages.push(invoicesHtml.slice(i,i+2));
-  const pagesHtml=pages.map(pair=>{
-    const cards=pair.map(h=>'<div class="inv-page">'+h+'</div>').join('<div class="cut no-print">✂ ตัดตรงนี้</div>');
-    return '<div class="page-wrap">'+cards+'</div>';
-  }).join('');
+    // รวม 2 ห้องต่อหน้า พร้อมเส้นตัด
+    const pages=[];
+    for(let i=0;i<invoicesHtml.length;i+=2) pages.push(invoicesHtml.slice(i,i+2));
+    const pagesHtml=pages.map(pair=>{
+      const cards=pair.map(h=>'<div class="inv-page">'+h+'</div>').join('<div class="cut no-print">✂ ตัดตรงนี้</div>');
+      return '<div class="page-wrap">'+cards+'</div>';
+    }).join('');
 
-    w.document.open(); // ล้างข้อความ "กำลังสร้าง..." ก่อนเขียนเนื้อหาจริง
-    w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    const fullHtml='<!DOCTYPE html><html><head><meta charset="UTF-8">'
       +'<title>ใบกำกับภาษี '+month+'</title>'
       +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Sarabun,sans-serif}'
       +sharedCSS
@@ -6565,12 +6541,28 @@ function bulkTaxInvoicePrint(){
       +'.cut{border-top:1px dashed #aaa;margin:2mm 0;text-align:center;font-size:10px;color:#aaa;padding:1mm 0;font-family:sans-serif}'
       +'@media print{.no-print{display:none}.cut{border-color:#ccc}}'
       +'</style></head><body>'
-      +pagesHtml+'</body></html>');
-    w.document.close();
-    toast('สร้างใบกำกับภาษี '+rooms.length+' ห้องแล้ว ✓');
-  }catch(outerErr){
-    toast('❌ เกิดข้อผิดพลาด: '+outerErr.message,'error');
-    console.error('bulkTaxInvoicePrint outer error:', outerErr);
+      +pagesHtml+'</body></html>';
+
+    // ── ใช้ iframe ที่ซ่อนอยู่ในหน้าเดิมแทน window.open() ──
+    // ไม่มีทางโดน popup blocker บล็อกได้เลย เพราะไม่ได้เปิดหน้าต่าง/แท็บใหม่จริงๆ
+    let iframe = document.getElementById('bulk-tax-invoice-print-frame');
+    if(iframe) iframe.remove(); // ลบของเก่าถ้ามีค้างอยู่ก่อนสร้างใหม่
+    iframe = document.createElement('iframe');
+    iframe.id = 'bulk-tax-invoice-print-frame';
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    const idoc = iframe.contentWindow.document;
+    idoc.open();
+    idoc.write(fullHtml);
+    idoc.close();
+    iframe.onload = function(){
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    };
+    toast('สร้างใบกำกับภาษี '+rooms.length+' ห้องแล้ว ✓ กำลังเปิดหน้าต่างพิมพ์...');
+  }catch(err){
+    toast('❌ เกิดข้อผิดพลาด: '+err.message,'error');
+    console.error('bulkTaxInvoicePrint error:', err);
   }
 }
 
