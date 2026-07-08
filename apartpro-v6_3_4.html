@@ -6506,10 +6506,13 @@ function bulkTaxInvoicePrint(){
     entries.forEach(({r,p})=>{
       const u=utils.filter(x=>x.room===r.id&&x.month===month).slice(-1)[0];
       const tenant=getTenantForRoom(r.id)||r.tenant||'—';
-      const rent=p?p.rent:(r.rent||0);
+      // ── ใช้วิธีคำนวณเดียวกับฟอร์มใบแจ้งหนี้เดี่ยวเป๊ะ (renderInvPreview) เพื่อให้ยอดตรงกันเสมอ ──
+      // ค่าเช่า: ดึงจากข้อมูลห้องปัจจุบันเสมอ (ไม่ใช่ค่าที่เคยบันทึกในรายการชำระเงินเก่า)
+      const rent=r.rent||0;
+      // ค่าน้ำ/ค่าไฟ: คำนวณสดจากมิเตอร์ + อัตราปัจจุบัน (ไม่ใช้ค่าที่เคยบันทึกไว้ ซึ่งอาจเป็นอัตราเก่า)
       const wu=u?u.wu:0, eu=u?u.eu:0;
-      const water=p?p.water:(u?u.wcost:0);
-      const elec=p?p.elec:(u?u.ecost:0);
+      const water=calcWaterCost(wu);
+      const elec=Math.round(eu*(+(s.erate)||6));
       const common=commonPerRoom, other=p?p.other:0;
       const total=rent+(water||0)+(elec||0)+common+other;
       const taxInvoiceKey = p?.id || ('room_'+r.id+'_'+month);
