@@ -705,6 +705,9 @@ body.staff-mode .staff-mode-badge { display:inline-flex !important; }
           <button class="btn btn-sm" onclick="printInv(3)" title="3 ใบต่อหน้า A4 ประหยัดกระดาษมากขึ้น"><i class="ti ti-copy"></i> 3 ใบ/หน้า A4</button>
           <button id="inv-send-line-btn" class="btn btn-sm" onclick="sendInvoiceLine()" style="background:#06C755;color:#fff;border:none" title="ส่งใบแจ้งหนี้ผ่าน LINE ไปยังห้องที่เลือก"><i class="ti ti-brand-line"></i> ส่งผ่าน LINE</button>
         </div>
+        <div class="btn-row" id="tax-bulk-print-row" style="margin-top:8px;display:none">
+          <button class="btn btn-sm" onclick="bulkTaxInvoicePrint()" title="พิมพ์ใบกำกับภาษีคนละห้อง 2 ห้องต่อหน้า A4"><i class="ti ti-copy"></i> ใบกำกับภาษี 2 ห้อง/หน้า A4 (ทุกห้อง)</button>
+        </div>
       </div>
     </div>
     <div>
@@ -2421,6 +2424,48 @@ function getOrCreateInvoiceNo(roomId, mon){
   const newNo = 'B'+(maxSeq+1);
   invNoLog[key] = newNo;
   LS.set('invoice_no_log', invNoLog);
+  return newNo;
+}
+// ── เลขที่ใบกำกับภาษี/ใบเสร็จ (คนละชุดกับ B11422 ของทะเบียนค่าเช่า) ──
+// รันตามลำดับการยืนยันรับเงินจริง (paymentId) ไม่ใช่ตามลำดับห้อง
+// ต้องเรียกตามลำดับที่ต้องการให้เลขออกมา (เรียงตาม confirmTs ก่อนเรียกใช้ฟังก์ชันนี้)
+function getOrCreateTaxInvoiceNo(paymentId){
+  if(!paymentId) return '';
+  const log = LS.get('tax_invoice_no_log') || {};
+  if(log[paymentId]) return log[paymentId];
+  let maxSeq = 0;
+  Object.values(log).forEach(v=>{
+    const n = parseInt(v, 10);
+    if(!isNaN(n) && n>maxSeq) maxSeq = n;
+  });
+  if(maxSeq===0){
+    // ครั้งแรกที่ใช้ระบบนี้ — ถามเลขเริ่มต้น (ต่อจากเลขที่เคยใช้จริงในเล่มใบเสร็จ)
+    const seed = prompt('ตั้งค่าเลขที่ใบกำกับภาษีเริ่มต้น (เลขล่าสุดที่เคยใช้ในเล่มใบเสร็จจริง เช่น 9497)\nเลขถัดไปจะเริ่มจากเลขนี้ + 1', '9497');
+    maxSeq = parseInt(seed, 10) || 9497;
+  }
+  const newNo = String(maxSeq+1);
+  log[paymentId] = newNo;
+  LS.set('tax_invoice_no_log', log);
+  return newNo;
+}
+// ── เลขที่ใบรับประกันเงินค่าห้อง (คนละเล่ม/คนละชุดเลขกับใบกำกับภาษี — เช่น "A0404" แยกจาก "9497") ──
+// รันตามลำดับการยืนยันรับเงินจริงเหมือนกัน (เรียกตามลำดับ confirmTs เดียวกับ getOrCreateTaxInvoiceNo)
+function getOrCreateGuaranteeNo(paymentId){
+  if(!paymentId) return '';
+  const log = LS.get('guarantee_no_log') || {};
+  if(log[paymentId]) return log[paymentId];
+  let maxSeq = 0;
+  Object.values(log).forEach(v=>{
+    const n = parseInt(v, 10);
+    if(!isNaN(n) && n>maxSeq) maxSeq = n;
+  });
+  if(maxSeq===0){
+    const seed = prompt('ตั้งค่าเลขที่ใบรับประกันเริ่มต้น (เลขล่าสุดที่เคยใช้ในเล่มจริง เช่น 0404)\nเลขถัดไปจะเริ่มจากเลขนี้ + 1', '0404');
+    maxSeq = parseInt(seed, 10) || 404;
+  }
+  const newNo = String(maxSeq+1).padStart(4,'0'); // เก็บรูปแบบ 4 หลักตามเล่มจริง เช่น 0405
+  log[paymentId] = newNo;
+  LS.set('guarantee_no_log', log);
   return newNo;
 }
 function initials(name){ const p=name.trim().split(' '); return p.length>1?(p[0][0]+p[1][0]).toUpperCase():name.slice(0,2).toUpperCase(); }
@@ -4604,7 +4649,7 @@ function makeQRDataURL(text){
   return 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(text);
 }
 
-function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo){
+function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo,returnHtml){
   const dObj=new Date(dateVal);
   const dateSlash=dObj.getDate()+'/'+(dObj.getMonth()+1)+'/'+(dObj.getFullYear()+543);
   const vatRate=+(s.vat||7)||7;
@@ -4660,7 +4705,7 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
     +'.docno{font-size:13px;color:#333}.sigbox{text-align:center}.sigline2{margin-top:30px;border-top:1px dotted #333;padding-top:3px;min-width:160px}'
     +'@media print{body{margin:0}.inv{border:1px solid #000}}</style>';
 
-  document.getElementById('inv-preview-card').innerHTML=CSS
+  const html=CSS
     +'<div class="inv">'
     +'<div class="hdr">'
       +'<div class="logo">SOMSUPA<br>PLACE</div>'
@@ -4702,6 +4747,8 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
       +'<div class="sigbox"><div class="sigline2">ผู้รับเงิน</div></div>'
     +'</div>'
     +'</div>';
+  if(returnHtml) return html;
+  document.getElementById('inv-preview-card').innerHTML=html;
 }
 
 // Thai baht text converter
@@ -4750,7 +4797,7 @@ async function sendInvoiceLine(){
   const eu = Math.round(Math.max(0, e2 - e1)*100)/100;
   const s = LS.get('settings') || {};
   const water = calcWaterCost(wu);
-  const elec = eu * (+(s.erate)||6);
+  const elec = Math.round(eu * (+(s.erate)||6));
   const common = +document.getElementById('inv-common').value || 0;
   const other = +document.getElementById('inv-other').value || 0;
   const total = rent + water + elec + common + other;
@@ -4792,6 +4839,8 @@ function renderInvPreview(){
   const type = document.getElementById('inv-type').value;
   const isInv = type === 'invoice';
   const isTax = type === 'tax';
+  const taxBulkRow = document.getElementById('tax-bulk-print-row');
+  if(taxBulkRow) taxBulkRow.style.display = isTax ? 'flex' : 'none';
   const tenant = document.getElementById('inv-tenant').value || '—';
   const roomSel = document.getElementById('inv-room');
   const rNo = roomSel.options[roomSel.selectedIndex]?.text.split('—')[0].replace('ห้อง','').trim() || '—';
@@ -4805,7 +4854,7 @@ function renderInvPreview(){
   const eu = Math.round(Math.max(0, e2 - e1)*100)/100;
   const s = LS.get('settings') || {name:'ApartPro',addr:'',tel:'',bank:'',bankname:'',promptpay:'',erate:6,wflat:100,wrate:18};
   const water = calcWaterCost(wu);
-  const elec = eu * (+(s.erate)||6);
+  const elec = Math.round(eu * (+(s.erate)||6));
   const common = +document.getElementById('inv-common').value || 0;
   const other = +document.getElementById('inv-other').value || 0;
   const total = rent + water + elec + common + other;
@@ -6419,6 +6468,112 @@ ${pages.join('\n')}
   w.onload=function(){ w.focus(); w.print(); };
   toast('เปิดหน้า PDF แล้ว '+rooms.length+' ห้อง — กด Print/Save as PDF ✓','success');
 }
+// ── พิมพ์ใบกำกับภาษีคนละห้อง 2 ห้องต่อหน้า A4 (ทุกห้องที่มีผู้เช่า) ──
+function bulkTaxInvoicePrint(){
+  try{
+    const rooms=(LS.get('rooms')||[]).filter(r=>r.status==='มีผู้เช่า');
+    if(!rooms.length){ toast('ไม่มีห้องที่มีผู้เช่า','error'); return; }
+
+    // ── เปิดหน้าต่างทันทีตั้งแต่ต้น (ก่อนมี prompt คั่นกลาง) ──
+    // ป้องกัน popup blocker เงียบๆ บล็อกหน้าต่างทิ้ง เพราะเบราว์เซอร์บางตัวจะไม่นับ window.open
+    // ที่เรียกหลัง prompt()/confirm() ว่าเป็นการกระทำโดยตรงจากการคลิกของผู้ใช้
+    const w=window.open('','_blank');
+    if(!w || w.closed){
+      toast('❌ เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณาอนุญาต popup สำหรับเว็บนี้แล้วลองใหม่ (เช็คไอคอนบล็อก popup ที่แถบ URL ด้านบน)','error');
+      return;
+    }
+    w.document.write('<p style="font-family:sans-serif;padding:20px;color:#666">กำลังสร้างใบกำกับภาษี กรุณารอสักครู่...</p>');
+
+    const pays=LS.get('payments')||[];
+    const utils=LS.get('utilities')||[];
+    const s=LS.get('settings')||{name:'ApartPro',addr:'',tel:'',bank:'',bankname:'',promptpay:''};
+    const month=document.getElementById('inv-month').value || currentMonth();
+    const dateVal=today();
+
+    // ค่าส่วนกลาง: ปกติเป็นค่าคงที่เท่ากันทุกห้อง ถามครั้งเดียวแล้วใช้กับทุกห้อง (ไม่ต้องกรอกทีละห้อง)
+    // ค่าเริ่มต้นดึงจากช่อง "ค่าส่วนกลาง" ในฟอร์มปัจจุบัน ถ้ามีกรอกไว้แล้ว
+    const defaultCommon = +document.getElementById('inv-common')?.value || 0;
+    const commonInput = prompt('ค่าส่วนกลางต่อห้อง (บาท) — ใช้ค่าเดียวกันทุกห้อง\nถ้าห้องไหนไม่มีค่าส่วนกลาง ใส่ 0', defaultCommon);
+    if(commonInput===null){ w.close(); return; } // ผู้ใช้กดยกเลิก — ปิดหน้าต่างที่เปิดรอไว้ด้วย
+    const commonPerRoom = +commonInput || 0;
+
+  // สร้าง HTML ใบกำกับภาษีทีละห้อง โดยใช้ renderTaxInvoice โหมด "คืนค่าเป็น string" (ไม่กระทบตัวอย่างที่กำลังแสดงอยู่)
+  const invoicesHtml=[];
+  let sharedCSS='';
+  try{
+    // ── เรียงลำดับห้องตามเวลายืนยันรับเงินจริง (confirmTs) ก่อนออกเลขที่ใบกำกับภาษี ──
+    // ห้องที่มี confirmTs (ยืนยันหลังอัปเดตระบบนี้) มาก่อน เรียงจากเวลาที่ยืนยันก่อน-หลัง
+    // ห้องที่มีแค่ p.date (ข้อมูลเก่าก่อนมี confirmTs) เรียงตามวันที่ต่อจากนั้น
+    // ห้องที่ยังไม่ได้ชำระ (ไม่มี payment) ไปท้ายสุด — ยังไม่ควรมีเลขที่ใบกำกับภาษีจริง
+    const entries = rooms.map(r=>{
+      const p=pays.filter(x=>x.room===r.id&&x.month===month).slice(-1)[0];
+      return {r, p};
+    }).sort((a,b)=>{
+      const at=a.p?.confirmTs, bt=b.p?.confirmTs;
+      if(at && bt) return at-bt;
+      if(at && !bt) return -1;
+      if(!at && bt) return 1;
+      const ad=a.p?.date||'9999-99-99', bd=b.p?.date||'9999-99-99';
+      return ad.localeCompare(bd);
+    });
+
+    entries.forEach(({r,p})=>{
+      const u=utils.filter(x=>x.room===r.id&&x.month===month).slice(-1)[0];
+      const tenant=getTenantForRoom(r.id)||r.tenant||'—';
+      const rent=p?p.rent:(r.rent||0);
+      const wu=u?u.wu:0, eu=u?u.eu:0;
+      const water=p?p.water:(u?u.wcost:0);
+      const elec=p?p.elec:(u?u.ecost:0);
+      const common=commonPerRoom, other=p?p.other:0;
+      const total=rent+(water||0)+(elec||0)+common+other;
+      // เลขที่ใบกำกับภาษี: คนละชุดกับ B11422 — รันตามลำดับที่ประมวลผล (ซึ่งเรียงตาม confirmTs แล้วด้านบน)
+      const taxInvoiceKey = p?.id || ('room_'+r.id+'_'+month); // ห้องที่ยังไม่จ่าย ใช้ key สำรอง
+      const docNo=getOrCreateTaxInvoiceNo(taxInvoiceKey);
+      // เลขที่ใบรับประกัน: คนละเล่มกับเลขที่ใบกำกับภาษี รันตามลำดับเดียวกัน (ตาม confirmTs)
+      const guaranteeNo=getOrCreateGuaranteeNo(taxInvoiceKey);
+      const html=renderTaxInvoice(tenant,r.no,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo,true);
+      // แยก CSS ออกมาเก็บไว้ครั้งเดียว (ทุกห้องใช้ CSS เดียวกัน) ป้องกันซ้ำซ้อน
+      const styleMatch=html.match(/<style>([\s\S]*?)<\/style>/i);
+      if(styleMatch && !sharedCSS) sharedCSS=styleMatch[1];
+      invoicesHtml.push(html.replace(/<style>[\s\S]*?<\/style>/i,''));
+    });
+  }catch(err){
+    w.close();
+    toast('❌ สร้างใบกำกับภาษีไม่สำเร็จ: '+err.message,'error');
+    console.error('bulkTaxInvoicePrint error:', err);
+    return;
+  }
+
+  // รวม 2 ห้องต่อหน้า พร้อมเส้นตัด
+  const pages=[];
+  for(let i=0;i<invoicesHtml.length;i+=2) pages.push(invoicesHtml.slice(i,i+2));
+  const pagesHtml=pages.map(pair=>{
+    const cards=pair.map(h=>'<div class="inv-page">'+h+'</div>').join('<div class="cut no-print">✂ ตัดตรงนี้</div>');
+    return '<div class="page-wrap">'+cards+'</div>';
+  }).join('');
+
+    w.document.open(); // ล้างข้อความ "กำลังสร้าง..." ก่อนเขียนเนื้อหาจริง
+    w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      +'<title>ใบกำกับภาษี '+month+'</title>'
+      +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Sarabun,sans-serif}'
+      +sharedCSS
+      +'@page{size:A4;margin:5mm}'
+      +'.page-wrap{page-break-after:always}'
+      +'.page-wrap:last-child{page-break-after:auto}'
+      +'.inv-page{width:100%;box-sizing:border-box;margin-bottom:2mm}'
+      +'.inv-page > *{transform:scale(0.80);transform-origin:top left;width:125%;display:block}'
+      +'.cut{border-top:1px dashed #aaa;margin:2mm 0;text-align:center;font-size:10px;color:#aaa;padding:1mm 0;font-family:sans-serif}'
+      +'@media print{.no-print{display:none}.cut{border-color:#ccc}}'
+      +'</style></head><body>'
+      +pagesHtml+'</body></html>');
+    w.document.close();
+    toast('สร้างใบกำกับภาษี '+rooms.length+' ห้องแล้ว ✓');
+  }catch(outerErr){
+    toast('❌ เกิดข้อผิดพลาด: '+outerErr.message,'error');
+    console.error('bulkTaxInvoicePrint outer error:', outerErr);
+  }
+}
+
 function bulkInvoice(perPage){
   const rooms=(LS.get('rooms')||[]).filter(r=>r.status==='มีผู้เช่า');
   if(!rooms.length){ toast('ไม่มีห้องที่มีผู้เช่า','error'); return; }
@@ -7407,6 +7562,7 @@ function confirmPayment(id){
   if(!confirm('ยืนยันรับชำระเงิน ฿'+fmt(p.total)+' จาก '+p.tenant+'?')) return;
   p.status='ชำระแล้ว';
   p.date=today();
+  p.confirmTs=Date.now(); // บันทึกเวลาแบบละเอียด ใช้เรียงลำดับใบกำกับภาษีตามลำดับยืนยันรับเงินจริง
   LS.set('payments',pays);
   logAudit('ยืนยันรับชำระเงิน', p.tenant+' ห้อง '+roomNo(p.room)+' เดือน '+p.month+' ฿'+fmt(p.total));
   renderPayments(); updateBadges();
@@ -7931,6 +8087,7 @@ async function confirmSlip(roomId,key,btn,roomNoText){
         const p = candidates[0];
         p.status='ชำระแล้ว';
         p.date=today();
+        p.confirmTs=Date.now();
         LS.set('payments',pays);
         try{ renderPayments(); }catch(e){}
         try{ renderDashboard(); }catch(e){}
@@ -8420,7 +8577,7 @@ function swfNext1(){
 
   const eu=Math.round(Math.max(0,e2-e1)*100)/100, wu=Math.round(Math.max(0,w2-w1)*100)/100;
   const s=LS.get('settings')||{erate:6,wflat:100,wrate:18};
-  const ecost=eu*(+(s.erate)||6);
+  const ecost=Math.round(eu*(+(s.erate)||6));
   const wcost=calcWaterCost(wu);
   const rooms=LS.get('rooms')||[];
   const r=rooms.find(x=>x.id===rId)||{};
@@ -9294,8 +9451,8 @@ function saveWalk(){
   Object.entries(_walkData).forEach(([id,d])=>{
     if(d.e2===''&&d.w2==='') return;
     const e2=d.e2===''?+d.e1:+d.e2; const w2=d.w2===''?+d.w1:+d.w2;
-    const eu=Math.max(0,e2-(+d.e1)); const wu=Math.max(0,w2-(+d.w1));
-    const ecost=eu*(+(s.erate)||6); const wcost=calcWaterCost(wu);
+    const eu=Math.round(Math.max(0,e2-(+d.e1))*100)/100; const wu=Math.round(Math.max(0,w2-(+d.w1))*100)/100;
+    const ecost=Math.round(eu*(+(s.erate)||6)); const wcost=calcWaterCost(wu);
     const existing=utils.findIndex(u=>u.room===id&&u.month===_walkMonth);
     const obj={id:existing>=0?utils[existing].id:uid('UTL'),room:id,month:_walkMonth,e1:+d.e1,e2,eu,ecost,w1:+d.w1,w2,wu,wcost,date:today()};
     if(existing>=0) utils[existing]=obj; else utils.push(obj); count++;
