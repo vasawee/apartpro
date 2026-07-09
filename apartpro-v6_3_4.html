@@ -5048,16 +5048,53 @@ function printInv(twoPerPage){
   const content = raw.replace(/<style>[\s\S]*?<\/style>/i, '');
   const w = window.open('','_blank','width=800,height=600');
   const threePerPage = twoPerPage === 3;
+  // หมายเหตุ: เดิมเคยใช้ transform:scale() แล้วเปลี่ยนเป็น zoom แต่ทั้งคู่มีปัญหาเดียวกันคือ
+  // Chrome คำนวณตำแหน่งตัดหน้ากระดาษ (page break) จากขนาด "ก่อนย่อ" ไม่ใช่ขนาดที่วาดจริง
+  // ทำให้แต่ละใบไปจองพื้นที่เต็มขนาดเดิม หลุดไปคนละหน้าเหมือนไม่ได้ย่อเลย
+  // วิธีแก้ที่ทนทานคือลดขนาด font-size/padding ของใบเสร็จเองตรงๆ (ไม่ใช้ scale/zoom ใดๆ)
+  // เพื่อให้ layout เล็กลงจริง ไม่มีทาง desync ระหว่างการจอง-การวาดอีก
+  const compact2up = `
+    .inv{font-size:11px}
+    .logo{font-size:14px;padding:6px}
+    .cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}
+    .title{font-size:13px;padding:5px}
+    .meta>div{padding:4px 8px;font-size:11px}
+    .itbl th{padding:4px 3px;font-size:10px}
+    .itbl td{padding:4px 6px;font-size:11px;height:20px}
+    .baht{padding:5px 8px;font-size:11px}
+    .pay{padding:5px 8px;font-size:11px;gap:10px}
+    .totbox>div{padding:3px 8px;font-size:11px}
+    .foot{padding:8px 8px;font-size:11px}
+    .sigline2{margin-top:18px;min-width:120px}
+  `;
+  const compact3up = `
+    .inv{font-size:9px}
+    .logo{font-size:11px;padding:4px}
+    .cohead{padding:4px 4px}.cohead h2{font-size:12px;margin-bottom:1px}.cohead p{font-size:8px;line-height:1.3}
+    .title{font-size:10px;padding:3px}
+    .meta>div{padding:3px 6px;font-size:9px}
+    .itbl th{padding:3px 2px;font-size:8px}
+    .itbl td{padding:2px 4px;font-size:9px;height:15px}
+    .baht{padding:3px 6px;font-size:9px}
+    .pay{padding:3px 6px;font-size:9px;gap:6px}
+    .totbox>div{padding:2px 6px;font-size:9px}
+    .foot{padding:5px 6px;font-size:9px}
+    .sigline2{margin-top:12px;min-width:90px}
+  `;
   const printCSS = threePerPage ? `
     @page{size:A4;margin:4mm}
     body{padding:0!important;background:#fff}
-    .inv-page{width:100%;box-sizing:border-box;margin-bottom:1mm;zoom:0.65}
+    .inv-page{width:100%;box-sizing:border-box;margin-bottom:1mm}
+    .inv-page .inv{max-width:none !important;width:100% !important;margin:0 !important}
+    ${compact3up}
     .cut{border-top:1px dashed #aaa;margin:1mm 0;text-align:center;font-size:9px;color:#aaa;padding:0.5mm 0;font-family:sans-serif}
     @media print{.no-print{display:none}.cut{border-color:#ccc}}
   ` : twoPerPage ? `
     @page{size:A4;margin:5mm}
     body{padding:0!important;background:#fff}
-    .inv-page{width:100%;box-sizing:border-box;margin-bottom:2mm;zoom:0.92}
+    .inv-page{width:100%;box-sizing:border-box;margin-bottom:2mm}
+    .inv-page .inv{max-width:none !important;width:100% !important;margin:0 !important}
+    ${compact2up}
     .cut{border-top:1px dashed #aaa;margin:2mm 0;text-align:center;font-size:10px;color:#aaa;padding:1mm 0;font-family:sans-serif}
     @media print{.no-print{display:none}.cut{border-color:#ccc}}
   ` : `
@@ -6542,8 +6579,23 @@ function bulkTaxInvoicePrint(){
       +'@page{size:A4;margin:5mm}'
       +'.page-wrap{page-break-after:always;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);margin-bottom:16px;padding:5mm}'
       +'.page-wrap:last-child{page-break-after:auto}'
-      +'.inv-page{width:100%;box-sizing:border-box;margin-bottom:2mm;zoom:0.92}'
+      +'.inv-page{width:100%;box-sizing:border-box;margin-bottom:2mm}'
       +'.inv-page .inv{max-width:none !important;width:100% !important;margin:0 !important}'
+      // หมายเหตุ: เดิมใช้ transform:scale() แล้วเปลี่ยนเป็น zoom แต่ทั้งคู่มีบั๊กเดียวกันคือ
+      // Chrome คำนวณตำแหน่งตัดหน้ากระดาษจากขนาด "ก่อนย่อ" ทำให้แต่ละใบจองพื้นที่เต็มขนาดเดิม
+      // หลุดไปคนละหน้า (เหมือนไม่ได้ย่อเลย) จึงเปลี่ยนมาลดขนาด font-size/padding ตรงๆ แทน
+      +'.inv{font-size:11px}'
+      +'.logo{font-size:14px;padding:6px}'
+      +'.cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}'
+      +'.title{font-size:13px;padding:5px}'
+      +'.meta>div{padding:4px 8px;font-size:11px}'
+      +'.itbl th{padding:4px 3px;font-size:10px}'
+      +'.itbl td{padding:4px 6px;font-size:11px;height:20px}'
+      +'.baht{padding:5px 8px;font-size:11px}'
+      +'.pay{padding:5px 8px;font-size:11px;gap:10px}'
+      +'.totbox>div{padding:3px 8px;font-size:11px}'
+      +'.foot{padding:8px 8px;font-size:11px}'
+      +'.sigline2{margin-top:18px;min-width:120px}'
       +'.cut{border-top:1px dashed #aaa;margin:2mm 0;text-align:center;font-size:10px;color:#aaa;padding:1mm 0;font-family:sans-serif}'
       +'@media print{body{background:#fff;padding:0}.no-print{display:none}.cut{border-color:#ccc}.page-wrap{box-shadow:none;padding:0}[contenteditable]{border-bottom:none !important}}'
       +'</style></head><body>'
