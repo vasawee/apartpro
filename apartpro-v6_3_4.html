@@ -5054,21 +5054,21 @@ function printInv(twoPerPage){
   // วิธีแก้ที่ทนทานคือลดขนาด font-size/padding ของใบเสร็จเองตรงๆ (ไม่ใช้ scale/zoom ใดๆ)
   // เพื่อให้ layout เล็กลงจริง ไม่มีทาง desync ระหว่างการจอง-การวาดอีก
   const compact2up = `
-    .inv{font-size:11px;border:none}
-    .logo{font-size:14px;padding:6px}
-    .cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}
-    .title{font-size:13px;padding:5px}
-    .meta>div{padding:4px 8px;font-size:11px}
-    .itbl th{padding:4px 3px;font-size:10px}
-    .itbl td{padding:4px 6px;font-size:11px;height:20px}
-    .baht{padding:5px 8px;font-size:11px}
-    .pay{padding:5px 8px;font-size:11px;gap:10px}
-    .totbox>div{padding:3px 8px;font-size:11px}
-    .foot{padding:8px 8px;font-size:11px}
-    .sigline2{margin-top:18px;min-width:120px}
+    .inv{font-size:12px;border:1px solid #999}
+    .logo{font-size:15px;padding:7px}
+    .cohead{padding:7px 7px}.cohead h2{font-size:16px;margin-bottom:3px}.cohead p{font-size:11px;line-height:1.5}
+    .title{font-size:14px;padding:6px}
+    .meta>div{padding:5px 9px;font-size:12px}
+    .itbl th{padding:5px 4px;font-size:11px}
+    .itbl td{padding:5px 7px;font-size:12px;height:22px}
+    .baht{padding:6px 9px;font-size:12px}
+    .pay{padding:6px 9px;font-size:12px;gap:12px}
+    .totbox>div{padding:4px 9px;font-size:12px}
+    .foot{padding:9px 9px;font-size:12px}
+    .sigline2{margin-top:20px;min-width:130px}
   `;
   const compact3up = `
-    .inv{font-size:9px;border:none}
+    .inv{font-size:9px;border:1px solid #999}
     .logo{font-size:11px;padding:4px}
     .cohead{padding:4px 4px}.cohead h2{font-size:12px;margin-bottom:1px}.cohead p{font-size:8px;line-height:1.3}
     .title{font-size:10px;padding:3px}
@@ -6561,15 +6561,19 @@ function bulkTaxInvoicePrint(){
       const html=renderTaxInvoice(tenant,r.no,month,rent,wu,eu,water,elec,common,other,total,dateVal,docNo,s,guaranteeNo,true);
       const styleMatch=html.match(/<style>([\s\S]*?)<\/style>/i);
       if(styleMatch && !sharedCSS) sharedCSS=styleMatch[1];
-      invoicesHtml.push(html.replace(/<style>[\s\S]*?<\/style>/i,''));
+      // เก็บว่าใบนี้ "แน่น" กว่าปกติไหม (มีรายการ "อื่นๆ" เป็นแถวที่ 6 หรือชื่อผู้เช่ายาวผิดปกติ)
+      // เพื่อเลือกขนาดตัวอักษรแบบ adaptive — คู่ไหนมีใบแน่นให้ลดขนาดทั้งคู่ คู่ไหนปกติขยายเต็มที่
+      const needsSmall = !!other || tenant.length>20;
+      invoicesHtml.push({html:html.replace(/<style>[\s\S]*?<\/style>/i,''), needsSmall});
     });
 
     // รวม 2 ห้องต่อหน้า พร้อมเส้นตัด
     const pages=[];
     for(let i=0;i<invoicesHtml.length;i+=2) pages.push(invoicesHtml.slice(i,i+2));
     const pagesHtml=pages.map(pair=>{
-      const cards=pair.map(h=>'<div class="inv-page">'+h+'</div>').join('<div class="cut no-print">✂ ตัดตรงนี้</div>');
-      return '<div class="page-wrap">'+cards+'</div>';
+      const tight = pair.some(x=>x.needsSmall);
+      const cards=pair.map(x=>'<div class="inv-page">'+x.html+'</div>').join('<div class="cut no-print">✂ ตัดตรงนี้</div>');
+      return '<div class="page-wrap '+(tight?'pw-tight':'pw-normal')+'">'+cards+'</div>';
     }).join('');
 
     const fullHtml='<!DOCTYPE html><html><head><meta charset="UTF-8">'
@@ -6584,20 +6588,34 @@ function bulkTaxInvoicePrint(){
       // หมายเหตุ: เดิมใช้ transform:scale() แล้วเปลี่ยนเป็น zoom แต่ทั้งคู่มีบั๊กเดียวกันคือ
       // Chrome คำนวณตำแหน่งตัดหน้ากระดาษจากขนาด "ก่อนย่อ" ทำให้แต่ละใบจองพื้นที่เต็มขนาดเดิม
       // หลุดไปคนละหน้า (เหมือนไม่ได้ย่อเลย) จึงเปลี่ยนมาลดขนาด font-size/padding ตรงๆ แทน
-      +'.inv{font-size:11px;border:none}'
-      +'.logo{font-size:14px;padding:6px}'
-      +'.cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}'
-      +'.title{font-size:13px;padding:5px}'
-      +'.meta>div{padding:4px 8px;font-size:11px}'
-      +'.itbl th{padding:4px 3px;font-size:10px}'
-      +'.itbl td{padding:4px 6px;font-size:11px;height:20px}'
-      +'.baht{padding:5px 8px;font-size:11px}'
-      +'.pay{padding:5px 8px;font-size:11px;gap:10px}'
-      +'.totbox>div{padding:3px 8px;font-size:11px}'
-      +'.foot{padding:8px 8px;font-size:11px}'
-      +'.sigline2{margin-top:18px;min-width:120px}'
+      // ปรับเป็น adaptive 2 ระดับ: คู่ห้องที่มีแค่ 4-5 รายการ (ปกติ) ขยายให้เต็มหน้าที่สุด
+      // คู่ไหนมีรายการ "อื่นๆ" (แถวที่ 6) หรือชื่อผู้เช่ายาวผิดปกติ ลดขนาดลงให้ยังพอดี 1 หน้าเสมอ
+      +'.pw-normal .inv{font-size:13px;border:1px solid #999}'
+      +'.pw-normal .logo{font-size:16px;padding:8px}'
+      +'.pw-normal .cohead{padding:8px 8px}.pw-normal .cohead h2{font-size:17px;margin-bottom:3px}.pw-normal .cohead p{font-size:12px;line-height:1.5}'
+      +'.pw-normal .title{font-size:15px;padding:7px}'
+      +'.pw-normal .meta>div{padding:6px 10px;font-size:13px}'
+      +'.pw-normal .itbl th{padding:6px 4px;font-size:12px}'
+      +'.pw-normal .itbl td{padding:6px 8px;font-size:13px;height:24px}'
+      +'.pw-normal .baht{padding:7px 10px;font-size:13px}'
+      +'.pw-normal .pay{padding:7px 10px;font-size:13px;gap:14px}'
+      +'.pw-normal .totbox>div{padding:5px 10px;font-size:13px}'
+      +'.pw-normal .foot{padding:10px 10px;font-size:13px}'
+      +'.pw-normal .sigline2{margin-top:22px;min-width:140px}'
+      +'.pw-tight .inv{font-size:12px;border:1px solid #999}'
+      +'.pw-tight .logo{font-size:15px;padding:7px}'
+      +'.pw-tight .cohead{padding:7px 7px}.pw-tight .cohead h2{font-size:16px;margin-bottom:3px}.pw-tight .cohead p{font-size:11px;line-height:1.5}'
+      +'.pw-tight .title{font-size:14px;padding:6px}'
+      +'.pw-tight .meta>div{padding:5px 9px;font-size:12px}'
+      +'.pw-tight .itbl th{padding:5px 4px;font-size:11px}'
+      +'.pw-tight .itbl td{padding:5px 7px;font-size:12px;height:22px}'
+      +'.pw-tight .baht{padding:6px 9px;font-size:12px}'
+      +'.pw-tight .pay{padding:6px 9px;font-size:12px;gap:12px}'
+      +'.pw-tight .totbox>div{padding:4px 9px;font-size:12px}'
+      +'.pw-tight .foot{padding:9px 9px;font-size:12px}'
+      +'.pw-tight .sigline2{margin-top:20px;min-width:130px}'
       +'.cut{border-top:1px dashed #aaa;margin:2mm 0;text-align:center;font-size:10px;color:#aaa;padding:1mm 0;font-family:sans-serif}'
-      +'@media print{body{background:#fff;padding:0}.no-print{display:none}.cut{border-color:#ccc}.page-wrap{box-shadow:none;padding:0}[contenteditable]{border-bottom:none !important}}'
+      +'@media print{body{background:#fff;padding:0}.no-print{display:none}.cut{border-color:#ccc}.page-wrap{box-shadow:none;padding:3mm}[contenteditable]{border-bottom:none !important}}'
       +'</style></head><body>'
       +pagesHtml+'</body></html>';
 
