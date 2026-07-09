@@ -4665,9 +4665,12 @@ function renderTaxInvoice(tenant,rNo,month,rent,wu,eu,water,elec,common,other,to
   // Build line items matching the company format
   const rows=[];
   // Split rent: ค่าห้อง (exempt) + ค่าเช่าเฟอร์นิเจอร์ (VATable)
-  if(rent){
-    const furnPart=Math.round(rent*furnPct);
-    const roomPart=rent-furnPart;
+  // หมายเหตุ: ค่าส่วนกลางเป็นส่วนหนึ่งที่ "รวมอยู่ใน" ค่าเช่าเดิมอยู่แล้ว ไม่ใช่ค่าใช้จ่ายเพิ่มเติม
+  // จึงต้องหักออกจากค่าเช่าก่อนแบ่งเป็นค่าห้อง/ค่าเฟอร์นิเจอร์ (ไม่งั้นยอดรวมจะสูงเกินจริง)
+  const rentForSplit = Math.max(0, rent - common);
+  if(rentForSplit){
+    const furnPart=Math.round(rentForSplit*furnPct);
+    const roomPart=rentForSplit-furnPart;
     if(roomPart>0) rows.push({label:'ค่าห้อง',base:roomPart,vat:0,amount:roomPart});
     if(furnPart>0){const sp=splitVat(furnPart);rows.push({label:'ค่าเช่าเฟอร์นิเจอร์',base:sp.base,vat:sp.vat,amount:furnPart});}
   }
@@ -4800,7 +4803,7 @@ async function sendInvoiceLine(){
   const elec = Math.round(eu * (+(s.erate)||6));
   const common = +document.getElementById('inv-common').value || 0;
   const other = +document.getElementById('inv-other').value || 0;
-  const total = rent + water + elec + common + other;
+  const total = rent + water + elec + other; // ค่าส่วนกลางรวมอยู่ในค่าเช่าแล้ว ไม่บวกซ้ำ
   const docNo = document.getElementById('inv-docno').value || '';
 
   let msg = '📋 ใบแจ้งหนี้ค่าเช่า — '+(s.name||'')
@@ -4808,7 +4811,7 @@ async function sendInvoiceLine(){
     +'\nประจำเดือน '+month
     +(docNo?'\nเลขที่ '+docNo:'')
     +'\n━━━━━━━━━━━━━━━━'
-    +'\n🏠 ค่าเช่า ฿'+fmt(rent);
+    +'\n🏠 ค่าเช่า ฿'+fmt(rent-common);
   if(elec) msg += '\n⚡ ค่าไฟ ฿'+fmt(elec)+' ('+eu+' หน่วย)';
   if(water) msg += '\n💧 ค่าน้ำ ฿'+fmt(water)+' ('+wu+' หน่วย)';
   if(common) msg += '\n🏢 ค่าส่วนกลาง ฿'+fmt(common);
@@ -4857,7 +4860,7 @@ function renderInvPreview(){
   const elec = Math.round(eu * (+(s.erate)||6));
   const common = +document.getElementById('inv-common').value || 0;
   const other = +document.getElementById('inv-other').value || 0;
-  const total = rent + water + elec + common + other;
+  const total = rent + water + elec + other; // ค่าส่วนกลางรวมอยู่ในค่าเช่าแล้ว ไม่บวกซ้ำ
   const dateVal = document.getElementById('inv-date').value || today();
   const docNo = document.getElementById('inv-docno').value || (isInv?'INV':'REC')+'-'+Date.now().toString(36).toUpperCase().slice(-6);
   const guaranteeNo = document.getElementById('inv-guaranteeno')?.value.trim() || '';
@@ -4954,7 +4957,7 @@ function renderInvPreview(){
   const rows = [];
   const wrate = +(s.wrate)||18;
   const erate = +(s.erate)||6;
-  rows.push({no:1, label:'ค่าห้อง', detail:'ระหว่างวันที่ '+periodOneLine, m1:'', m2:'', eq:'', unit:'', rate:'', amt:rent});
+  rows.push({no:1, label:'ค่าห้อง', detail:'ระหว่างวันที่ '+periodOneLine, m1:'', m2:'', eq:'', unit:'', rate:'', amt:(rent-common)});
   if(water) rows.push({no:2, label:'ค่าน้ำ',  detail:wPeriod, m1:w1?w1.toFixed(3):'', m2:w2?w2.toFixed(3):'', eq:wu?'=':'', unit:wu?wu.toFixed(wu%1?2:0):'', rate:wu?wrate.toFixed(2):'', amt:water});
   if(elec)  rows.push({no:3, label:'ค่าไฟ',  detail:ePeriod, m1:e1?Math.round(e1).toString():'', m2:e2?Math.round(e2).toString():'', eq:eu?'=':'', unit:eu?eu.toFixed(eu%1?2:0):'', rate:eu?erate.toFixed(2):'', amt:elec});
   if(common) rows.push({no:rows.length+1, label:'ค่าส่วนกลาง', detail:'', m1:'', m2:'', eq:'', unit:'', rate:'', amt:common});
@@ -6514,7 +6517,7 @@ function bulkTaxInvoicePrint(){
       const water=calcWaterCost(wu);
       const elec=Math.round(eu*(+(s.erate)||6));
       const common=commonPerRoom, other=p?p.other:0;
-      const total=rent+(water||0)+(elec||0)+common+other;
+      const total=rent+(water||0)+(elec||0)+other; // ค่าส่วนกลางรวมอยู่ในค่าเช่าแล้ว ไม่บวกซ้ำ
       // เลขที่รันตามลำดับที่ประมวลผลในรอบนี้ (นับใหม่ทุกครั้งตามเลขเริ่มต้นที่เพิ่งถามไป)
       taxSeq++;
       guaranteeSeq++;
