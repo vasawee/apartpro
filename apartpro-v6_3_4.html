@@ -6480,8 +6480,11 @@ function bulkTaxInvoicePrint(){
     const month=document.getElementById('inv-month').value || currentMonth();
     const dateVal=today();
 
-    // ค่าส่วนกลาง: ดึงจากช่อง "ค่าส่วนกลาง" ในฟอร์มใบแจ้งหนี้เดี่ยวโดยตรง (ไม่ถามซ้ำ) ใช้ค่าเดียวกันทุกห้อง
-    const commonPerRoom = +document.getElementById('inv-common')?.value || 0;
+    // ค่าส่วนกลาง: ปกติเป็นค่าคงที่เท่ากันทุกห้อง ถามครั้งเดียวแล้วใช้กับทุกห้อง (ไม่ต้องกรอกทีละห้อง)
+    const defaultCommon = +document.getElementById('inv-common')?.value || 0;
+    const commonInput = prompt('ค่าส่วนกลางต่อห้อง (บาท) — ใช้ค่าเดียวกันทุกห้อง\nถ้าห้องไหนไม่มีค่าส่วนกลาง ใส่ 0', defaultCommon);
+    if(commonInput===null) return; // ผู้ใช้กดยกเลิก
+    const commonPerRoom = +commonInput || 0;
 
     // ── ถามเลขเริ่มต้นทุกครั้งที่กด (ไม่จำค่าจากครั้งก่อน) ให้ปรับได้ทุกรอบตามที่ต้องการ ──
     const taxSeedInput = prompt('เลขที่ใบกำกับภาษีล่าสุดที่เคยใช้ในเล่มจริง (เลขถัดไปจะเริ่มจากเลขนี้ + 1)\nเช่น ถ้าใช้ล่าสุดคือ 9497 ห้องแรกจะได้ 9498', '9497');
