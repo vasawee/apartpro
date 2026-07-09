@@ -5054,7 +5054,7 @@ function printInv(twoPerPage){
   // วิธีแก้ที่ทนทานคือลดขนาด font-size/padding ของใบเสร็จเองตรงๆ (ไม่ใช้ scale/zoom ใดๆ)
   // เพื่อให้ layout เล็กลงจริง ไม่มีทาง desync ระหว่างการจอง-การวาดอีก
   const compact2up = `
-    .inv{font-size:11px}
+    .inv{font-size:11px;border:none}
     .logo{font-size:14px;padding:6px}
     .cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}
     .title{font-size:13px;padding:5px}
@@ -5068,7 +5068,7 @@ function printInv(twoPerPage){
     .sigline2{margin-top:18px;min-width:120px}
   `;
   const compact3up = `
-    .inv{font-size:9px}
+    .inv{font-size:9px;border:none}
     .logo{font-size:11px;padding:4px}
     .cohead{padding:4px 4px}.cohead h2{font-size:12px;margin-bottom:1px}.cohead p{font-size:8px;line-height:1.3}
     .title{font-size:10px;padding:3px}
@@ -6584,7 +6584,7 @@ function bulkTaxInvoicePrint(){
       // หมายเหตุ: เดิมใช้ transform:scale() แล้วเปลี่ยนเป็น zoom แต่ทั้งคู่มีบั๊กเดียวกันคือ
       // Chrome คำนวณตำแหน่งตัดหน้ากระดาษจากขนาด "ก่อนย่อ" ทำให้แต่ละใบจองพื้นที่เต็มขนาดเดิม
       // หลุดไปคนละหน้า (เหมือนไม่ได้ย่อเลย) จึงเปลี่ยนมาลดขนาด font-size/padding ตรงๆ แทน
-      +'.inv{font-size:11px}'
+      +'.inv{font-size:11px;border:none}'
       +'.logo{font-size:14px;padding:6px}'
       +'.cohead{padding:6px 6px}.cohead h2{font-size:15px;margin-bottom:2px}.cohead p{font-size:10px;line-height:1.4}'
       +'.title{font-size:13px;padding:5px}'
@@ -9668,8 +9668,10 @@ function renderRentRegister(){
     const u=utils.filter(x=>x.room===r.id&&x.month===month).slice(-1)[0]||utils.filter(x=>x.room===String(r.no)&&x.month===month).slice(-1)[0];
     const c=cons.filter(x=>x.room===r.id&&x.status!=='หมดแล้ว').slice(-1)[0]||cons.filter(x=>x.room===String(r.no)&&x.status!=='หมดแล้ว').slice(-1)[0];
     const isVacant=r.status==='ว่าง'||r.status==='ซ่อมบำรุง';
-    // ค่าเช่า: ดึงจากข้อมูลห้องเท่านั้น (ไม่ดึงจากสัญญาเช่าหรือ payment)
-    const rentAmt=+(r.rent)||0;
+    // ค่าเช่า: ดึงจาก payment ของเดือนนั้นก่อน (ค่าเช่าที่บันทึกไว้จริง ณ ตอนนั้น) — เช็คว่ามี record ของเดือนนี้ไหม ไม่ใช่เช็คว่า rent เป็น 0 หรือเปล่า เผื่อเดือนที่ปลอดค่าเช่าจริงๆ
+    // ถ้าเดือนนั้นยังไม่มี payment เลยค่อย fallback ไปใช้ค่าเช่าปัจจุบันของห้อง (เช่นเดือนปัจจุบัน/อนาคตที่ยังไม่ได้บันทึก)
+    // หมายเหตุ: เดิมใช้ r.rent เสมอ ทำให้แก้ค่าเช่าห้องแล้วย้อนไปเปลี่ยนตัวเลขเดือนที่ปิดบัญชีไปแล้ว
+    const rentAmt=pThis?(+pThis.rent||0):(+r.rent||0);
     // ค่าไฟ/น้ำ: อ่านจาก payment เดือนนี้ก่อน ถ้าไม่มีค่อยดึงจาก utility
     const elecAmt=+(pThis?.elec)||+(u?.ecost)||0;
     const waterAmt=+(pThis?.water)||+(u?.wcost)||0;
