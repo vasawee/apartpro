@@ -1425,6 +1425,7 @@ function toggleAutoBackup() {
       <select id="rr-month-sel" class="btn btn-sm" onchange="renderRentRegister()" style="padding:5px 10px"></select>
       <button class="btn btn-sm" onclick="renderRentRegister()"><i class="ti ti-refresh"></i></button>
       <button id="rr-lock-btn" class="btn btn-sm" onclick="toggleMonthLock()"><i class="ti ti-lock"></i> ปิดบัญชีเดือนนี้</button>
+      <button class="btn btn-sm" onclick="resetInvoiceNoForMonth()" title="ใช้เมื่อเลขที่ใบแจ้งหนี้ของเดือนนี้ซ้ำ/ผิด — จะลบเลขเดือนนี้ทิ้งแล้วออกเลขใหม่ต่อจากเดือนล่าสุด"><i class="ti ti-restore"></i> รีเซ็ตเลขที่เดือนนี้</button>
       <button class="btn btn-pr btn-sm" onclick="printRentRegister()"><i class="ti ti-printer"></i> พิมพ์</button>
     </div>
   </div>
@@ -2407,6 +2408,32 @@ function fmt(n){ return Math.round(n||0).toLocaleString('th-TH'); }
 function today(){ return new Date().toISOString().split('T')[0]; }
 const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 function currentMonth(){ const d=new Date(); return MONTHS[d.getMonth()]+' '+(d.getFullYear()+543); }
+// ── บันทึกเลขที่ใบเสร็จรับเงิน/ใบกำกับภาษี ที่พิมพ์ในทะเบียนค่าเช่า กลับเข้า payment record ──
+function updateTaxReceiptNo(spanEl){
+  const payId=spanEl.dataset.payid;
+  if(!payId) return;
+  const pays=LS.get('payments')||[];
+  const p=pays.find(x=>x.id===payId);
+  if(!p) return;
+  p.taxReceiptNo=spanEl.textContent.trim();
+  LS.set('payments', pays);
+}
+// ── ล้างเลขที่ใบแจ้งหนี้ของเดือนที่กำลังดูอยู่ แล้วให้ออกเลขใหม่ต่อจากเดือนอื่นๆ ทั้งหมด ──
+// ใช้แก้ปัญหาเลขซ้ำที่เกิดจาก 2 เครื่อง/คนออกเลขแยกกันก่อนที่จะ sync กัน (แก้ที่ต้นเหตุแล้วใน cloudPush/cloudPull
+// แต่เลขที่ผิดที่ถูกบันทึกไปแล้วก่อนหน้านี้ต้องล้างด้วยปุ่มนี้ครั้งเดียว)
+function resetInvoiceNoForMonth(){
+  const sel=document.getElementById('rr-month-sel');
+  const month=sel?.value||currentMonth();
+  if(!confirm('ลบเลขที่ใบแจ้งหนี้ทั้งหมดของเดือน "'+month+'" แล้วออกเลขใหม่ต่อจากเดือนอื่นที่มีอยู่?\n(ใช้เมื่อเลขซ้ำ/ผิด เช่นเดือนนี้ดันซ้ำกับเดือนก่อน)')) return;
+  const invNoLog=LS.get('invoice_no_log')||{};
+  let removed=0;
+  Object.keys(invNoLog).forEach(key=>{
+    if(key.endsWith('|'+month)){ delete invNoLog[key]; removed++; }
+  });
+  LS.set('invoice_no_log', invNoLog);
+  toast('ล้างเลขที่เดือน "'+month+'" แล้ว ('+removed+' รายการ) — เปิดหน้านี้ใหม่จะออกเลขที่ถูกต้องให้อัตโนมัติ');
+  renderRentRegister();
+}
 // ── เลขที่ใบแจ้งหนี้ (รันต่อเนื่องตลอดไป ข้ามทุกเดือน ไม่รีเซ็ต ไม่ผูกกับเลขห้องจริง) ──
 // ใช้ร่วมกันระหว่าง "ทะเบียนค่าเช่ารายเดือน" และ "ฟอร์มใบแจ้งหนี้" เพื่อให้เลขไม่ซ้ำ/ไม่ขัดแย้งกัน
 // เก็บ log แบบถาวรใน localStorage: key = roomId|month → เลขที่ใบแจ้งหนี้ที่เคยออกให้แล้ว
@@ -6020,7 +6047,7 @@ async function cloudPush(){
   const collections=['rooms','payments','utilities','maintenance','contracts',
                      'expenses','deposits','rent_adjusts','checklists','contact_logs',
                      'room_notes','waitlist','rent_history','bookings','settings',
-                     'applications','renewal_settings'];
+                     'applications','renewal_settings','invoice_no_log','tax_invoice_no_log'];
   let done=0, failed=[];
   for(const col of collections){
     const data=LS.get(col);
@@ -6064,6 +6091,10 @@ async function cloudPull(){
                      'expenses','deposits','rent_adjusts','checklists','contact_logs',
                      'room_notes','waitlist','rent_history','bookings',
                      'applications','renewal_settings'];
+  // เลขที่ใบแจ้งหนี้/ใบกำกับภาษี เป็น object แบบ key→เลขที่ (ไม่ใช่ array ของ record เหมือนคอลเลกชันอื่น)
+  // ต้อง "รวม" (merge) เข้ากับของเครื่องนี้ ไม่ใช่แปลงเป็น array หรือทับทิ้งตรงๆ
+  // ไม่งั้นเลขที่ที่แต่ละเครื่อง/คนออกไปแล้วจะชนกัน (เช่น เดือน ก.ค. เลขซ้ำกับเดือน มิ.ย.)
+  const mergeLogCollections=['invoice_no_log','tax_invoice_no_log'];
   let done=0;
   try{
     // ดึง timestamp ของ Firebase และ local เพื่อเปรียบเทียบ
@@ -6088,6 +6119,19 @@ async function cloudPull(){
       }
       LS.set(col, arr);
       done++;
+    }
+
+    // รวมเลขที่ใบแจ้งหนี้/ใบกำกับภาษีจาก Firebase เข้ากับของเครื่องนี้ (merge ไม่ทับ)
+    for(const col of mergeLogCollections){
+      try{
+        const r=await fetch(base+'/apartpro/'+col+'.json');
+        if(!r||!r.ok) continue;
+        const remote=await r.json();
+        if(!remote || typeof remote!=='object') continue;
+        const local=LS.get(col) || {};
+        LS.set(col, {...local, ...remote}); // remote ชนะถ้าคีย์ซ้ำ (ถือว่าเป็นค่าที่ sync ล่าสุด)
+        done++;
+      }catch(e){}
     }
     syncStatus('✅ Pull สำเร็จ ('+done+' collections) — '+new Date().toLocaleTimeString('th-TH'),true);
     try{renderDashboard();}catch(e){} try{updateBadges();}catch(e){}
@@ -9638,7 +9682,9 @@ function renderRentRegister(){
   }
 
   // Due date formatted as D/M/YYYY (Thai)
-  const dueDate='30/'+mIdx+'/'+mparts[1];
+  // วันกำหนดชำระ = วันสุดท้ายของเดือนจริง (28-31 แล้วแต่เดือน) ไม่ใช่ 30 คงที่แบบเดิม
+  const lastDayOfMonth = new Date(mYear, mIdx, 0).getDate();
+  const dueDate=lastDayOfMonth+'/'+mIdx+'/'+mparts[1];
 
   // แปลงวันที่ทุก format → D/M/YYYY พ.ศ. เช่น "5/7/2569"
   function toThaiDate(str){
@@ -9729,6 +9775,7 @@ function renderRentRegister(){
       <td style="border:1px solid #ddd;padding:5px 7px"></td>
       <td style="border:1px solid #ddd;padding:5px 7px"></td>
       <td style="border:1px solid #ddd;padding:5px 7px"></td>
+      <td style="border:1px solid #ddd;padding:5px 7px"></td>
     </tr>`;
 
     const invoiceNo=getOrCreateInvoiceNo(r.id, month);
@@ -9744,6 +9791,7 @@ function renderRentRegister(){
       <td style="font-size:11px;color:#555;white-space:nowrap;font-weight:600;border:1px solid #ddd;padding:5px 7px">${receiptNo||"—"}</td>
       <td style="text-align:right;font-weight:600;font-size:13px;color:${!hasData?'#bbb':''};border:1px solid #ddd;padding:5px 7px">${hasData?fmt(amt)+'.00':'—'}</td>
       <td style="font-size:11px;color:#854F0B;max-width:120px;border:1px solid #ddd;padding:5px 7px">${depositNote}</td>
+      <td style="min-width:90px;border:1px solid #ddd;padding:5px 4px;text-align:center">${pThis?`<span contenteditable="true" data-payid="${pThis.id}" oninput="updateTaxReceiptNo(this)" title="คลิกเพื่อกรอกเลขที่ใบเสร็จ/ใบกำกับภาษี" style="display:inline-block;min-width:60px;border-bottom:1px dashed #999;cursor:text;font-size:11px;font-weight:600;color:#185FA5">${(pThis.taxReceiptNo||'').replace(/</g,'&lt;')}</span>`:''}</td>
       <td style="min-width:60px;border:1px solid #ddd;padding:5px 7px"></td>
     </tr>`;
   });
@@ -9768,6 +9816,7 @@ function renderRentRegister(){
           <th style="padding:6px 8px;border:1px solid #378ADD;white-space:nowrap">เลขที่ใบรับประกัน</th>
           <th style="padding:6px 8px;border:1px solid #378ADD;text-align:right">รวม</th>
           <th style="padding:6px 8px;border:1px solid #378ADD">ค่าผ่อนประกัน/<br>ชำระล่วงหน้า</th>
+          <th style="padding:6px 8px;border:1px solid #378ADD;min-width:90px">ใบเสร็จรับเงิน/<br>ใบกำกับภาษี</th>
           <th style="padding:6px 8px;border:1px solid #378ADD;min-width:60px">ผู้รับเงิน</th>
         </tr>
       </thead>
@@ -9779,7 +9828,7 @@ function renderRentRegister(){
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:center">ห้อง</td>
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:right;font-size:12px">ยอดรวมค่าเช่า</td>
           <td style="padding:7px 8px;border:1px solid #ccc;text-align:right;font-size:15px;color:#27500A">฿${fmt(Math.round(totalAmt))}</td>
-          <td colspan="3" style="padding:7px 8px;border:1px solid #ccc;font-size:12px;color:#555">
+          <td colspan="4" style="padding:7px 8px;border:1px solid #ccc;font-size:12px;color:#555">
             เข้าใหม่ ${newIn} ห้อง &nbsp;·&nbsp; ว่าง ${vacantCount} ห้อง
           </td>
         </tr>
